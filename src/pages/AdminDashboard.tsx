@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { format } from 'date-fns';
-import { LogOut, Users, ClipboardList, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { LogOut, Users, ClipboardList, Search, ChevronDown, ChevronUp, Pencil, Check, X } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
 
 type Profile = Tables<'profiles'>;
@@ -19,10 +20,13 @@ interface StudentData {
 
 export default function AdminDashboard() {
   const { signOut } = useAuth();
+  const { toast } = useToast();
   const [students, setStudents] = useState<StudentData[]>([]);
   const [search, setSearch] = useState('');
   const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [editingHours, setEditingHours] = useState<string | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   useEffect(() => {
     loadStudents();
@@ -47,6 +51,31 @@ export default function AdminDashboard() {
 
     setStudents(studentData);
     setLoading(false);
+  };
+
+  const handleEditHours = (userId: string, currentHours: number) => {
+    setEditingHours(userId);
+    setEditValue(String(currentHours));
+  };
+
+  const handleSaveHours = async (userId: string) => {
+    const newHours = Number(editValue);
+    if (isNaN(newHours) || newHours <= 0) {
+      toast({ title: 'Invalid value', description: 'Please enter a valid number of hours.', variant: 'destructive' });
+      return;
+    }
+    const { error } = await supabase.from('profiles').update({ total_required_hours: newHours }).eq('user_id', userId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: 'Updated!', description: `Required hours set to ${newHours}h.` });
+      setStudents(prev => prev.map(s =>
+        s.profile.user_id === userId
+          ? { ...s, profile: { ...s.profile, total_required_hours: newHours } }
+          : s
+      ));
+    }
+    setEditingHours(null);
   };
 
   const filtered = students.filter(s =>
@@ -78,7 +107,6 @@ export default function AdminDashboard() {
       </header>
 
       <main className="container mx-auto p-4 space-y-6 max-w-5xl">
-        {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 animate-fade-in">
           <Card>
             <CardContent className="pt-6">
@@ -108,18 +136,11 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Search */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search students..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-          />
+          <Input placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" />
         </div>
 
-        {/* Student List */}
         <div className="space-y-3 animate-fade-in">
           {loading ? (
             <p className="text-center text-muted-foreground py-8">Loading students...</p>
@@ -133,6 +154,7 @@ export default function AdminDashboard() {
                 ? Math.min(100, (totalHours / profile.total_required_hours) * 100)
                 : 0;
               const isExpanded = expandedStudent === profile.user_id;
+              const isEditing = editingHours === profile.user_id;
 
               return (
                 <Card key={profile.user_id}>
@@ -169,21 +191,54 @@ export default function AdminDashboard() {
 
                   {isExpanded && (
                     <CardContent className="pt-0 pb-6">
-                      <div className="border-t pt-4 space-y-2 max-h-64 overflow-y-auto">
-                        {reports.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">No reports yet.</p>
-                        ) : (
-                          reports.slice(0, 14).map(report => (
-                            <div key={report.id} className="flex items-start justify-between p-3 rounded-lg bg-muted/50 text-sm">
-                              <div>
-                                <p className="font-medium">{format(new Date(report.report_date), 'EEEE, MMM d')}</p>
-                                <p className="text-muted-foreground mt-1">{report.tasks_completed}</p>
-                                {report.remarks && <p className="text-xs text-muted-foreground mt-1 italic">{report.remarks}</p>}
-                              </div>
-                              <span className="font-heading font-bold text-primary whitespace-nowrap ml-4">{report.hours_rendered}h</span>
+                      <div className="border-t pt-4 space-y-4">
+                        {/* Edit Required Hours */}
+                        <div className="flex items-center gap-2 p-3 rounded-lg bg-muted/50">
+                          <span className="text-sm font-medium">Required Hours:</span>
+                          {isEditing ? (
+                            <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <Input
+                                type="number"
+                                min="1"
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="w-24 h-8"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleSaveHours(profile.user_id); }}>
+                                <Check className="w-4 h-4 text-success" />
+                              </Button>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setEditingHours(null); }}>
+                                <X className="w-4 h-4 text-destructive" />
+                              </Button>
                             </div>
-                          ))
-                        )}
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-heading font-bold">{profile.total_required_hours}h</span>
+                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleEditHours(profile.user_id, profile.total_required_hours); }}>
+                                <Pencil className="w-3 h-3" />
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Reports List */}
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {reports.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">No reports yet.</p>
+                          ) : (
+                            reports.slice(0, 14).map(report => (
+                              <div key={report.id} className="flex items-start justify-between p-3 rounded-lg bg-muted/50 text-sm">
+                                <div>
+                                  <p className="font-medium">{format(new Date(report.report_date), 'EEEE, MMM d')}</p>
+                                  <p className="text-muted-foreground mt-1">{report.tasks_completed}</p>
+                                  {report.remarks && <p className="text-xs text-muted-foreground mt-1 italic">{report.remarks}</p>}
+                                </div>
+                                <span className="font-heading font-bold text-primary whitespace-nowrap ml-4">{report.hours_rendered}h</span>
+                              </div>
+                            ))
+                          )}
+                        </div>
                       </div>
                     </CardContent>
                   )}
