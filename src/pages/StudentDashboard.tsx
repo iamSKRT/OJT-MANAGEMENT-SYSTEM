@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, ClipboardList } from 'lucide-react';
+import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import type { Tables } from '@/integrations/supabase/types';
 
@@ -40,6 +40,8 @@ export default function StudentDashboard() {
     const d = new Date(r.report_date);
     return d >= weekStart && d <= weekEnd;
   });
+
+  const weeklyTotal = weekReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
 
   useEffect(() => {
     if (!user) return;
@@ -75,11 +77,8 @@ export default function StudentDashboard() {
         tasks_completed: tasksCompleted,
         remarks,
       }).eq('id', existing.id);
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'Report updated!' });
-      }
+      if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      else toast({ title: 'Report updated!' });
     } else {
       const { error } = await supabase.from('daily_reports').insert({
         user_id: user.id,
@@ -88,11 +87,8 @@ export default function StudentDashboard() {
         tasks_completed: tasksCompleted,
         remarks,
       });
-      if (error) {
-        toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      } else {
-        toast({ title: 'Report saved!' });
-      }
+      if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
+      else toast({ title: 'Report saved!' });
     }
 
     const { data } = await supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false });
@@ -100,93 +96,81 @@ export default function StudentDashboard() {
     setSaving(false);
   };
 
+  const handleSignOut = async () => {
+    await signOut();
+  };
+
   const progressPercent = totalRequired > 0 ? Math.min(100, (totalCompleted / totalRequired) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="border-b bg-card">
-        <div className="container mx-auto flex items-center justify-between py-4 px-4">
+      {/* Header */}
+      <header className="sticky top-0 z-50 glass border-b">
+        <div className="container mx-auto flex items-center justify-between py-3 px-4">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-              <ClipboardList className="w-5 h-5 text-primary" />
+            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+              <GraduationCap className="w-5 h-5 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="font-heading text-lg font-bold">OJT Weekly Report</h1>
-              <p className="text-sm text-muted-foreground">{profile?.full_name || user?.email}</p>
+              <h1 className="font-heading text-base font-bold leading-tight">OJT Tracker</h1>
+              <p className="text-xs text-muted-foreground">{profile?.full_name || user?.email}</p>
             </div>
           </div>
-          <Button variant="ghost" size="sm" onClick={signOut}>
+          <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
             <LogOut className="w-4 h-4 mr-2" /> Sign Out
           </Button>
         </div>
       </header>
 
-      <main className="container mx-auto p-4 space-y-6 max-w-5xl">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 animate-fade-in">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <CheckCircle2 className="w-5 h-5 text-success" />
+      <main className="container mx-auto p-4 space-y-6 max-w-5xl pb-12">
+        {/* Stats */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 animate-fade-in">
+          {[
+            { label: 'Weekly Total', value: `${weeklyTotal}h`, icon: Clock, color: 'bg-primary/10 text-primary' },
+            { label: 'Total Completed', value: `${totalCompleted}h`, icon: CheckCircle2, color: 'bg-success/10 text-success' },
+            { label: 'Hours Left', value: `${hoursLeft}h`, icon: Timer, color: 'bg-warning/10 text-warning' },
+            { label: 'Progress', value: `${progressPercent.toFixed(0)}%`, icon: TrendingUp, color: 'bg-accent text-accent-foreground' },
+          ].map(({ label, value, icon: Icon, color }) => (
+            <Card key={label} className="border-0 shadow-sm">
+              <CardContent className="p-4">
+                <div className={cn("w-8 h-8 rounded-lg flex items-center justify-center mb-2", color)}>
+                  <Icon className="w-4 h-4" />
                 </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total Completed</p>
-                  <p className="text-2xl font-heading font-bold">{totalCompleted}h</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <Timer className="w-5 h-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Hours Left</p>
-                  <p className="text-2xl font-heading font-bold">{hoursLeft}h</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Progress</p>
-                  <p className="text-2xl font-heading font-bold">{progressPercent.toFixed(1)}%</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+                <p className="text-2xl font-heading font-bold">{value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
+              </CardContent>
+            </Card>
+          ))}
         </div>
 
         {/* Progress bar */}
-        <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
-          <div
-            className="h-full bg-primary rounded-full transition-all duration-500"
-            style={{ width: `${progressPercent}%` }}
-          />
+        <div className="space-y-1.5">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>{totalCompleted}h completed</span>
+            <span>{totalRequired}h required</span>
+          </div>
+          <div className="w-full bg-muted rounded-full h-2.5 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-700 ease-out"
+              style={{ width: `${progressPercent}%`, background: 'var(--gradient-primary)' }}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily Report Form */}
-          <Card className="animate-fade-in">
-            <CardHeader>
-              <CardTitle className="font-heading text-lg">Daily Report</CardTitle>
+          <Card className="border-0 shadow-sm animate-fade-in" style={{ animationDelay: '0.1s' }}>
+            <CardHeader className="pb-3">
+              <CardTitle className="font-heading text-base">Daily Report</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="text-sm font-medium mb-1 block">Date</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Date</label>
                 <Popover>
                   <PopoverTrigger asChild>
-                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal", !selectedDate && "text-muted-foreground")}>
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {format(selectedDate, 'PPP')}
+                    <Button variant="outline" className={cn("w-full justify-start text-left font-normal h-10", !selectedDate && "text-muted-foreground")}>
+                      <CalendarIcon className="mr-2 h-4 w-4 text-muted-foreground" />
+                      {format(selectedDate, 'EEEE, MMM d, yyyy')}
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0" align="start">
@@ -195,13 +179,13 @@ export default function StudentDashboard() {
                       selected={selectedDate}
                       onSelect={(d) => d && setSelectedDate(d)}
                       initialFocus
-                      className={cn("p-3 pointer-events-auto")}
+                      className="p-3 pointer-events-auto"
                     />
                   </PopoverContent>
                 </Popover>
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Hours Rendered</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Hours Rendered</label>
                 <Input
                   type="number"
                   min="0"
@@ -210,37 +194,40 @@ export default function StudentDashboard() {
                   placeholder="e.g. 8"
                   value={hoursRendered}
                   onChange={(e) => setHoursRendered(e.target.value)}
+                  className="h-10"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Tasks Completed</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Tasks Completed</label>
                 <Textarea
                   placeholder="Describe what you worked on today..."
                   value={tasksCompleted}
                   onChange={(e) => setTasksCompleted(e.target.value)}
-                  rows={4}
+                  rows={3}
+                  className="resize-none"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium mb-1 block">Remarks</label>
+                <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Remarks</label>
                 <Input
                   placeholder="Any additional notes..."
                   value={remarks}
                   onChange={(e) => setRemarks(e.target.value)}
+                  className="h-10"
                 />
               </div>
-              <Button onClick={handleSave} disabled={saving} className="w-full">
+              <Button onClick={handleSave} disabled={saving} className="w-full h-10 font-semibold">
                 {saving ? 'Saving...' : 'Save Report'}
               </Button>
             </CardContent>
           </Card>
 
           {/* Weekly Summary */}
-          <Card className="animate-fade-in">
-            <CardHeader>
-            <div className="flex items-center justify-between">
-                <CardTitle className="font-heading text-lg">
-                  Week of {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
+          <Card className="border-0 shadow-sm animate-fade-in" style={{ animationDelay: '0.2s' }}>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="font-heading text-base">
+                  {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
                 </CardTitle>
                 <ExportWeeklyPdf
                   selectedDate={selectedDate}
@@ -252,21 +239,22 @@ export default function StudentDashboard() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 {weekDays.map(day => {
                   const dateStr = format(day, 'yyyy-MM-dd');
                   const report = weekReports.find(r => r.report_date === dateStr);
-                  const isToday = format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+                  const isToday = dateStr === format(new Date(), 'yyyy-MM-dd');
+                  const isSelected = format(selectedDate, 'yyyy-MM-dd') === dateStr;
                   return (
                     <button
                       key={dateStr}
                       onClick={() => setSelectedDate(day)}
                       className={cn(
-                        "w-full flex items-center justify-between p-3 rounded-lg text-left transition-colors",
-                        format(selectedDate, 'yyyy-MM-dd') === dateStr
-                          ? "bg-primary/10 border border-primary/20"
-                          : "hover:bg-muted",
-                        isToday && "ring-1 ring-primary/30"
+                        "w-full flex items-center justify-between p-3 rounded-xl text-left transition-all duration-200",
+                        isSelected
+                          ? "bg-primary/10 border border-primary/20 shadow-sm"
+                          : "hover:bg-muted/60",
+                        isToday && !isSelected && "ring-1 ring-primary/20"
                       )}
                     >
                       <div>
@@ -276,13 +264,13 @@ export default function StudentDashboard() {
                       <div className="text-right">
                         {report ? (
                           <>
-                            <p className="font-heading font-bold text-sm">{report.hours_rendered}h</p>
-                            <p className="text-xs text-muted-foreground truncate max-w-[140px]">
-                              {report.tasks_completed.slice(0, 30)}{report.tasks_completed.length > 30 ? '…' : ''}
+                            <p className="font-heading font-bold text-sm text-primary">{report.hours_rendered}h</p>
+                            <p className="text-xs text-muted-foreground truncate max-w-[120px]">
+                              {report.tasks_completed.slice(0, 25)}{report.tasks_completed.length > 25 ? '…' : ''}
                             </p>
                           </>
                         ) : (
-                          <p className="text-xs text-muted-foreground">No report</p>
+                          <p className="text-xs text-muted-foreground">—</p>
                         )}
                       </div>
                     </button>
@@ -291,9 +279,7 @@ export default function StudentDashboard() {
               </div>
               <div className="mt-4 pt-4 border-t flex justify-between items-center">
                 <span className="text-sm font-medium">Weekly Total</span>
-                <span className="font-heading font-bold text-primary">
-                  {weekReports.reduce((s, r) => s + Number(r.hours_rendered), 0)}h
-                </span>
+                <span className="font-heading font-bold text-lg gradient-text">{weeklyTotal}h</span>
               </div>
             </CardContent>
           </Card>
