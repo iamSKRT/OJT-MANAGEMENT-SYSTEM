@@ -11,6 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, ClipboardList } from 'lucide-react';
+import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import type { Tables } from '@/integrations/supabase/types';
 
 type DailyReport = Tables<'daily_reports'>;
