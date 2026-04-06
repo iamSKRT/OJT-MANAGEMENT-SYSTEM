@@ -11,6 +11,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, ClipboardList } from 'lucide-react';
+import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import type { Tables } from '@/integrations/supabase/types';
 
 type DailyReport = Tables<'daily_reports'>;
@@ -237,9 +238,18 @@ export default function StudentDashboard() {
           {/* Weekly Summary */}
           <Card className="animate-fade-in">
             <CardHeader>
-              <CardTitle className="font-heading text-lg">
-                Week of {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
-              </CardTitle>
+            <div className="flex items-center justify-between">
+                <CardTitle className="font-heading text-lg">
+                  Week of {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d, yyyy')}
+                </CardTitle>
+                <ExportWeeklyPdf
+                  selectedDate={selectedDate}
+                  reports={reports}
+                  profile={profile}
+                  totalCompleted={totalCompleted}
+                  totalRequired={totalRequired}
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
