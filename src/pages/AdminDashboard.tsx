@@ -5,9 +5,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { format } from 'date-fns';
-import { LogOut, Users, GraduationCap, Search, ChevronDown, ChevronUp, Pencil, Check, X, TrendingUp } from 'lucide-react';
+import { LogOut, Users, GraduationCap, Search, Pencil, Check, X, TrendingUp } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
+import { startOfWeek, endOfWeek } from 'date-fns';
 
 type Profile = Tables<'profiles'>;
 type DailyReport = Tables<'daily_reports'>;
@@ -16,6 +16,7 @@ interface StudentData {
   profile: Profile;
   reports: DailyReport[];
   totalHours: number;
+  weeklyHours: number;
 }
 
 export default function AdminDashboard() {
@@ -23,10 +24,13 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const [students, setStudents] = useState<StudentData[]>([]);
   const [search, setSearch] = useState('');
-  const [expandedStudent, setExpandedStudent] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [editingHours, setEditingHours] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  const now = new Date();
+  const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+  const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
 
   useEffect(() => {
     loadStudents();
@@ -46,16 +50,22 @@ export default function AdminDashboard() {
       .map(profile => {
         const studentReports = (reports ?? []).filter(r => r.user_id === profile.user_id);
         const totalHours = studentReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
-        return { profile, reports: studentReports, totalHours };
+        const weeklyHours = studentReports
+          .filter(r => {
+            const d = new Date(r.report_date);
+            return d >= weekStart && d <= weekEnd;
+          })
+          .reduce((s, r) => s + Number(r.hours_rendered), 0);
+        return { profile, reports: studentReports, totalHours, weeklyHours };
       });
 
     setStudents(studentData);
     setLoading(false);
   };
 
-  const handleEditHours = (userId: string, currentHours: number) => {
+  const handleEditHours = (userId: string, currentRequired: number) => {
     setEditingHours(userId);
-    setEditValue(String(currentHours));
+    setEditValue(String(currentRequired));
   };
 
   const handleSaveHours = async (userId: string) => {
@@ -150,105 +160,80 @@ export default function AdminDashboard() {
             <div className="text-center text-muted-foreground py-12">No students found.</div>
           ) : (
             filtered.map(student => {
-              const { profile, reports, totalHours } = student;
+              const { profile, totalHours, weeklyHours } = student;
               const hoursLeft = Math.max(0, profile.total_required_hours - totalHours);
               const progress = profile.total_required_hours > 0
                 ? Math.min(100, (totalHours / profile.total_required_hours) * 100)
                 : 0;
-              const isExpanded = expandedStudent === profile.user_id;
               const isEditing = editingHours === profile.user_id;
 
               return (
-                <Card key={profile.user_id} className="border-0 shadow-sm overflow-hidden">
-                  <button
-                    className="w-full text-left"
-                    onClick={() => setExpandedStudent(isExpanded ? null : profile.user_id)}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-heading font-bold text-primary text-sm">
-                            {profile.full_name?.[0]?.toUpperCase() || '?'}
-                          </div>
-                          <div>
-                            <p className="font-semibold text-sm">{profile.full_name || 'Unnamed'}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {totalHours}h / {profile.total_required_hours}h
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="text-right hidden sm:block">
-                            <p className="text-sm font-heading font-bold">{hoursLeft}h</p>
-                            <p className="text-xs text-muted-foreground">remaining</p>
-                          </div>
-                          {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
-                        </div>
+                <Card key={profile.user_id} className="border-0 shadow-sm">
+                  <CardContent className="p-4 space-y-4">
+                    {/* Student name & avatar */}
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-heading font-bold text-primary text-sm">
+                        {profile.full_name?.[0]?.toUpperCase() || '?'}
                       </div>
-                      <div className="mt-3 w-full bg-muted rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${progress}%`, background: 'var(--gradient-primary)' }}
-                        />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm">{profile.full_name || 'Unnamed'}</p>
                       </div>
-                    </CardContent>
-                  </button>
+                    </div>
 
-                  {isExpanded && (
-                    <CardContent className="pt-0 pb-4 px-4">
-                      <div className="border-t pt-4 space-y-4">
-                        {/* Edit Required Hours */}
-                        <div className="flex items-center gap-2 p-3 rounded-xl bg-muted/50">
-                          <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Required Hours:</span>
+                    {/* Stats grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Weekly</p>
+                        <p className="font-heading font-bold text-sm mt-1">{weeklyHours}h</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Completed</p>
+                        <p className="font-heading font-bold text-sm mt-1">{totalHours}h</p>
+                      </div>
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Hours Left</p>
+                        <div className="flex items-center justify-center gap-1 mt-1">
                           {isEditing ? (
-                            <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                            <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                               <Input
                                 type="number"
                                 min="1"
                                 value={editValue}
                                 onChange={(e) => setEditValue(e.target.value)}
-                                className="w-24 h-8"
+                                className="w-20 h-7 text-center text-sm"
                                 onClick={(e) => e.stopPropagation()}
                               />
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); handleSaveHours(profile.user_id); }}>
-                                <Check className="w-4 h-4 text-success" />
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => handleSaveHours(profile.user_id)}>
+                                <Check className="w-3.5 h-3.5 text-success" />
                               </Button>
-                              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setEditingHours(null); }}>
-                                <X className="w-4 h-4 text-destructive" />
+                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => setEditingHours(null)}>
+                                <X className="w-3.5 h-3.5 text-destructive" />
                               </Button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5">
-                              <span className="text-sm font-heading font-bold">{profile.total_required_hours}h</span>
-                              <Button size="icon" variant="ghost" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); handleEditHours(profile.user_id, profile.total_required_hours); }}>
+                            <>
+                              <span className="font-heading font-bold text-sm">{hoursLeft}h</span>
+                              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => handleEditHours(profile.user_id, profile.total_required_hours)}>
                                 <Pencil className="w-3 h-3" />
                               </Button>
-                            </div>
+                            </>
                           )}
                         </div>
-
-                        {/* Recent Activity */}
-                        <div>
-                          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2">Recent Activity</p>
-                          <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                            {reports.length === 0 ? (
-                              <p className="text-sm text-muted-foreground py-2">No reports yet.</p>
-                            ) : (
-                              reports.slice(0, 14).map(report => (
-                                <div key={report.id} className="flex items-start justify-between p-3 rounded-xl bg-muted/30 text-sm">
-                                  <div className="min-w-0 flex-1">
-                                    <p className="font-medium text-xs">{format(new Date(report.report_date), 'EEEE, MMM d')}</p>
-                                    <p className="text-muted-foreground text-xs mt-0.5 truncate">{report.tasks_completed}</p>
-                                  </div>
-                                  <span className="font-heading font-bold text-primary text-sm ml-3 whitespace-nowrap">{report.hours_rendered}h</span>
-                                </div>
-                              ))
-                            )}
-                          </div>
-                        </div>
                       </div>
-                    </CardContent>
-                  )}
+                      <div className="p-3 rounded-xl bg-muted/50 text-center">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Progress</p>
+                        <p className="font-heading font-bold text-sm mt-1">{progress.toFixed(0)}%</p>
+                      </div>
+                    </div>
+
+                    {/* Progress bar */}
+                    <div className="w-full bg-muted rounded-full h-1.5 overflow-hidden">
+                      <div
+                        className="h-full rounded-full transition-all duration-500"
+                        style={{ width: `${progress}%`, background: 'var(--gradient-primary)' }}
+                      />
+                    </div>
+                  </CardContent>
                 </Card>
               );
             })
