@@ -102,6 +102,8 @@ export default function ExportWeeklyPdf({
           <thead>
             <tr>
               <th>Day</th>
+              <th style="text-align:center;">Time In</th>
+              <th style="text-align:center;">Time Out</th>
               <th style="text-align:center;">Hours</th>
               <th>Tasks Completed</th>
               <th>Remarks</th>
