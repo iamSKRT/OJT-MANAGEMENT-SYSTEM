@@ -21,6 +21,14 @@ export default function ExportWeeklyPdf({
   totalCompleted,
   totalRequired,
 }: ExportWeeklyPdfProps) {
+  const formatTime12 = (time: string) => {
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
+  };
+
   const handleExport = () => {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -42,6 +50,8 @@ export default function ExportWeeklyPdf({
         return `
           <tr>
             <td style="padding:8px 12px;border:1px solid #ddd;">${format(day, 'EEEE, MMM d')}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_in ? formatTime12(report.time_in) : '—'}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_out ? formatTime12(report.time_out) : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report ? report.hours_rendered + 'h' : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;">${report ? report.tasks_completed : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;">${report?.remarks || '—'}</td>
@@ -100,6 +110,8 @@ export default function ExportWeeklyPdf({
           <thead>
             <tr>
               <th>Day</th>
+              <th style="text-align:center;">Time In</th>
+              <th style="text-align:center;">Time Out</th>
               <th style="text-align:center;">Hours</th>
               <th>Tasks Completed</th>
               <th>Remarks</th>

@@ -22,6 +22,8 @@ export type Database = {
           remarks: string | null
           report_date: string
           tasks_completed: string
+          time_in: string | null
+          time_out: string | null
           updated_at: string
           user_id: string
         }
@@ -32,6 +34,8 @@ export type Database = {
           remarks?: string | null
           report_date: string
           tasks_completed?: string
+          time_in?: string | null
+          time_out?: string | null
           updated_at?: string
           user_id: string
         }
@@ -42,6 +46,8 @@ export type Database = {
           remarks?: string | null
           report_date?: string
           tasks_completed?: string
+          time_in?: string | null
+          time_out?: string | null
           updated_at?: string
           user_id?: string
         }

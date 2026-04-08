@@ -12,10 +12,22 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
+import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
 import type { Tables } from '@/integrations/supabase/types';
 
 type DailyReport = Tables<'daily_reports'>;
 type Profile = Tables<'profiles'>;
+
+// Get current Philippine time as HH:mm string
+const getPhilippineTime = () => {
+  const now = new Date();
+  return now.toLocaleTimeString('en-US', {
+    timeZone: 'Asia/Manila',
+    hour12: false,
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 export default function StudentDashboard() {
   const { user, signOut } = useAuth();
@@ -26,6 +38,8 @@ export default function StudentDashboard() {
   const [hoursRendered, setHoursRendered] = useState('');
   const [tasksCompleted, setTasksCompleted] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [timeIn, setTimeIn] = useState('');
+  const [timeOut, setTimeOut] = useState('');
   const [saving, setSaving] = useState(false);
 
   const totalCompleted = reports.reduce((sum, r) => sum + Number(r.hours_rendered), 0);
@@ -58,12 +72,24 @@ export default function StudentDashboard() {
       setHoursRendered(String(existing.hours_rendered));
       setTasksCompleted(existing.tasks_completed);
       setRemarks(existing.remarks ?? '');
+      setTimeIn(existing.time_in ?? '');
+      setTimeOut(existing.time_out ?? '');
     } else {
       setHoursRendered('');
       setTasksCompleted('');
       setRemarks('');
+      setTimeIn('');
+      setTimeOut('');
     }
   }, [selectedDate, reports]);
+
+  const handleTimeIn = () => {
+    setTimeIn(getPhilippineTime());
+  };
+
+  const handleTimeOut = () => {
+    setTimeOut(getPhilippineTime());
+  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -71,21 +97,23 @@ export default function StudentDashboard() {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const existing = reports.find(r => r.report_date === dateStr);
 
+    const payload = {
+      hours_rendered: Number(hoursRendered) || 0,
+      tasks_completed: tasksCompleted,
+      remarks,
+      time_in: timeIn || null,
+      time_out: timeOut || null,
+    };
+
     if (existing) {
-      const { error } = await supabase.from('daily_reports').update({
-        hours_rendered: Number(hoursRendered) || 0,
-        tasks_completed: tasksCompleted,
-        remarks,
-      }).eq('id', existing.id);
+      const { error } = await supabase.from('daily_reports').update(payload).eq('id', existing.id);
       if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
       else toast({ title: 'Report updated!' });
     } else {
       const { error } = await supabase.from('daily_reports').insert({
         user_id: user.id,
         report_date: dateStr,
-        hours_rendered: Number(hoursRendered) || 0,
-        tasks_completed: tasksCompleted,
-        remarks,
+        ...payload,
       });
       if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
       else toast({ title: 'Report saved!' });
@@ -101,6 +129,15 @@ export default function StudentDashboard() {
   };
 
   const progressPercent = totalRequired > 0 ? Math.min(100, (totalCompleted / totalRequired) * 100) : 0;
+
+  const formatTime = (time: string) => {
+    if (!time) return '';
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -164,6 +201,7 @@ export default function StudentDashboard() {
               <CardTitle className="font-heading text-base">Daily Report</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Date */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Date</label>
                 <Popover>
@@ -184,6 +222,42 @@ export default function StudentDashboard() {
                   </PopoverContent>
                 </Popover>
               </div>
+
+              {/* Time In / Time Out */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Time In</label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      type="time"
+                      value={timeIn}
+                      onChange={(e) => setTimeIn(e.target.value)}
+                      className="h-10 flex-1"
+                    />
+                    <Button variant="outline" size="sm" className="h-10 px-2.5 text-xs" onClick={handleTimeIn} title="Set to current PH time">
+                      Now
+                    </Button>
+                  </div>
+                  {timeIn && <p className="text-xs text-muted-foreground mt-1">{formatTime(timeIn)}</p>}
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Time Out</label>
+                  <div className="flex gap-1.5">
+                    <Input
+                      type="time"
+                      value={timeOut}
+                      onChange={(e) => setTimeOut(e.target.value)}
+                      className="h-10 flex-1"
+                    />
+                    <Button variant="outline" size="sm" className="h-10 px-2.5 text-xs" onClick={handleTimeOut} title="Set to current PH time">
+                      Now
+                    </Button>
+                  </div>
+                  {timeOut && <p className="text-xs text-muted-foreground mt-1">{formatTime(timeOut)}</p>}
+                </div>
+              </div>
+
+              {/* Hours Rendered */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Hours Rendered</label>
                 <Input
@@ -197,6 +271,8 @@ export default function StudentDashboard() {
                   className="h-10"
                 />
               </div>
+
+              {/* Tasks Completed */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Tasks Completed</label>
                 <Textarea
@@ -207,6 +283,8 @@ export default function StudentDashboard() {
                   className="resize-none"
                 />
               </div>
+
+              {/* Remarks */}
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Remarks</label>
                 <Input
@@ -216,6 +294,7 @@ export default function StudentDashboard() {
                   className="h-10"
                 />
               </div>
+
               <Button onClick={handleSave} disabled={saving} className="w-full h-10 font-semibold">
                 {saving ? 'Saving...' : 'Save Report'}
               </Button>
@@ -229,13 +308,22 @@ export default function StudentDashboard() {
                 <CardTitle className="font-heading text-base">
                   {format(weekStart, 'MMM d')} – {format(weekEnd, 'MMM d')}
                 </CardTitle>
-                <ExportWeeklyPdf
-                  selectedDate={selectedDate}
-                  reports={reports}
-                  profile={profile}
-                  totalCompleted={totalCompleted}
-                  totalRequired={totalRequired}
-                />
+                <div className="flex gap-2">
+                  <ExportWeeklyExcel
+                    selectedDate={selectedDate}
+                    reports={reports}
+                    profile={profile}
+                    totalCompleted={totalCompleted}
+                    totalRequired={totalRequired}
+                  />
+                  <ExportWeeklyPdf
+                    selectedDate={selectedDate}
+                    reports={reports}
+                    profile={profile}
+                    totalCompleted={totalCompleted}
+                    totalRequired={totalRequired}
+                  />
+                </div>
               </div>
             </CardHeader>
             <CardContent>
@@ -265,8 +353,10 @@ export default function StudentDashboard() {
                         {report ? (
                           <>
                             <p className="font-heading font-bold text-sm text-primary">{report.hours_rendered}h</p>
-                            <p className="text-xs text-muted-foreground truncate max-w-[120px]">
-                              {report.tasks_completed.slice(0, 25)}{report.tasks_completed.length > 25 ? '…' : ''}
+                            <p className="text-xs text-muted-foreground">
+                              {report.time_in && report.time_out
+                                ? `${formatTime(report.time_in)} - ${formatTime(report.time_out)}`
+                                : report.tasks_completed.slice(0, 25) + (report.tasks_completed.length > 25 ? '…' : '')}
                             </p>
                           </>
                         ) : (
