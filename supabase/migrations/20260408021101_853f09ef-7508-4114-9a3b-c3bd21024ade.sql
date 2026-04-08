@@ -1,0 +1,1 @@
+ALTER TABLE public.daily_reports ADD COLUMN time_in time WITHOUT TIME ZONE, ADD COLUMN time_out time WITHOUT TIME ZONE;
