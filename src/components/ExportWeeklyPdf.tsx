@@ -21,6 +21,14 @@ export default function ExportWeeklyPdf({
   totalCompleted,
   totalRequired,
 }: ExportWeeklyPdfProps) {
+  const formatTime12 = (time: string) => {
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
+  };
+
   const handleExport = () => {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
