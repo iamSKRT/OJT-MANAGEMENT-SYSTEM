@@ -42,6 +42,8 @@ export default function ExportWeeklyPdf({
         return `
           <tr>
             <td style="padding:8px 12px;border:1px solid #ddd;">${format(day, 'EEEE, MMM d')}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_in ? formatTime12(report.time_in) : '—'}</td>
+            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_out ? formatTime12(report.time_out) : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report ? report.hours_rendered + 'h' : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;">${report ? report.tasks_completed : '—'}</td>
             <td style="padding:8px 12px;border:1px solid #ddd;">${report?.remarks || '—'}</td>
