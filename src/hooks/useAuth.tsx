@@ -33,9 +33,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data } = await supabase
             .from('user_roles')
             .select('role')
-            .eq('user_id', session.user.id)
-            .maybeSingle();
-          setRole(data?.role ?? 'student');
+            .eq('user_id', session.user.id);
+          const roles = (data ?? []).map(r => r.role);
+          setRole(roles.includes('admin') ? 'admin' : roles[0] ?? 'student');
         } else {
           setRole(null);
         }
@@ -49,9 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data } = await supabase
           .from('user_roles')
           .select('role')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
-        setRole(data?.role ?? 'student');
+          .eq('user_id', session.user.id);
+        const roles = (data ?? []).map(r => r.role);
+        setRole(roles.includes('admin') ? 'admin' : roles[0] ?? 'student');
       }
       setLoading(false);
     });
