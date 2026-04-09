@@ -1,4 +1,4 @@
-import { format, startOfWeek, endOfWeek, eachDayOfInterval } from 'date-fns';
+import { format, startOfWeek, endOfWeek, eachDayOfInterval, getWeek } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { FileDown } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
@@ -26,101 +26,114 @@ export default function ExportWeeklyPdf({
     const hour = parseInt(h);
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
-    return `${hour12}:${m} ${ampm}`;
+    return `${hour12}:${m}${ampm}`;
   };
 
   const handleExport = () => {
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
+    const weekNum = getWeek(selectedDate, { weekStartsOn: 1 });
 
     const weekReports = reports.filter((r) => {
       const d = new Date(r.report_date);
       return d >= weekStart && d <= weekEnd;
     });
 
+    // Only include days that have reports
+    const filledDays = weekDays.filter((day) => {
+      const dateStr = format(day, 'yyyy-MM-dd');
+      return weekReports.some((r) => r.report_date === dateStr);
+    });
+
     const weeklyTotal = weekReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
     const hoursLeft = Math.max(0, totalRequired - totalCompleted);
-    const progress = totalRequired > 0 ? ((totalCompleted / totalRequired) * 100).toFixed(1) : '0';
 
-    const rows = weekDays
+    const rows = filledDays
       .map((day) => {
         const dateStr = format(day, 'yyyy-MM-dd');
         const report = weekReports.find((r) => r.report_date === dateStr);
         return `
           <tr>
-            <td style="padding:8px 12px;border:1px solid #ddd;">${format(day, 'EEEE, MMM d')}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_in ? formatTime12(report.time_in) : '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report?.time_out ? formatTime12(report.time_out) : '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;text-align:center;">${report ? report.hours_rendered + 'h' : '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;">${report ? report.tasks_completed : '—'}</td>
-            <td style="padding:8px 12px;border:1px solid #ddd;">${report?.remarks || '—'}</td>
+            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;font-weight:bold;">${format(day, 'MMMM d, yyyy')}</td>
+            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report?.time_in ? formatTime12(report.time_in) : ''}</td>
+            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report?.time_out ? formatTime12(report.time_out) : ''}</td>
+            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report ? report.hours_rendered + ' hours' : ''}</td>
+            <td style="padding:8px 10px;border:1px solid #000;font-size:11px;">${report?.tasks_completed || ''}</td>
           </tr>`;
       })
       .join('');
+
+    const logoUrl = window.location.origin + '/images/pisopay-logo.png';
 
     const html = `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Weekly OJT Report</title>
+        <title>Weekly Report Sheet</title>
         <style>
           * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: Arial, sans-serif; padding: 40px; color: #1a1a1a; }
-          h1 { font-size: 22px; margin-bottom: 4px; }
-          .subtitle { color: #666; font-size: 14px; margin-bottom: 24px; }
-          .stats { display: flex; gap: 24px; margin-bottom: 24px; }
-          .stat { background: #f5f5f5; border-radius: 8px; padding: 12px 20px; }
-          .stat-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; }
-          .stat-value { font-size: 20px; font-weight: bold; margin-top: 2px; }
-          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-          th { background: #f0f0f0; padding: 8px 12px; border: 1px solid #ddd; text-align: left; font-size: 13px; }
-          td { font-size: 13px; vertical-align: top; }
-          .footer { margin-top: 24px; font-size: 11px; color: #999; text-align: center; }
-          @media print { body { padding: 20px; } }
+          body { font-family: Arial, sans-serif; padding: 40px 50px; color: #000; }
+          .logo-section { text-align: center; margin-bottom: 20px; }
+          .logo-section img { width: 120px; height: auto; }
+          .logo-text { font-size: 10px; color: #666; }
+          h1 { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 16px; }
+          .info-section { margin-bottom: 12px; font-size: 12px; }
+          .info-section p { margin-bottom: 2px; }
+          .info-label { font-weight: bold; }
+          .info-value { text-decoration: underline; }
+          .week-label { text-align: center; font-size: 13px; font-weight: bold; margin: 16px 0 8px; background: #e8e8e8; padding: 4px; border: 1px solid #000; }
+          table { width: 100%; border-collapse: collapse; }
+          th { background: #e8e8e8; padding: 8px 10px; border: 1px solid #000; font-size: 12px; font-weight: bold; text-align: center; }
+          .summary { text-align: right; font-size: 12px; margin-top: 12px; }
+          .summary p { margin-bottom: 2px; }
+          .summary-value { text-decoration: underline; font-weight: bold; }
+          .reviewed-section { margin-top: 60px; font-size: 12px; }
+          .reviewed-section .line { border-bottom: 1px solid #000; width: 200px; margin: 20px 0 4px; }
+          .reviewed-section .name { font-weight: bold; font-style: italic; }
+          @media print { body { padding: 20px 30px; } }
         </style>
       </head>
       <body>
-        <h1>OJT Weekly Report</h1>
-        <p class="subtitle">
-          ${profile?.full_name || 'Student'} &mdash;
-          Week of ${format(weekStart, 'MMM d')} – ${format(weekEnd, 'MMM d, yyyy')}
-        </p>
-
-        <div class="stats">
-          <div class="stat">
-            <div class="stat-label">Weekly Total</div>
-            <div class="stat-value">${weeklyTotal}h</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Total Completed</div>
-            <div class="stat-value">${totalCompleted}h</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Hours Remaining</div>
-            <div class="stat-value">${hoursLeft}h</div>
-          </div>
-          <div class="stat">
-            <div class="stat-label">Progress</div>
-            <div class="stat-value">${progress}%</div>
-          </div>
+        <div class="logo-section">
+          <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'" />
         </div>
+
+        <h1>WEEKLY REPORT SHEET</h1>
+
+        <div class="info-section">
+          <p><span class="info-label">Name of Student:</span> <span class="info-value">${profile?.full_name || 'N/A'}</span></p>
+          <p><span class="info-label">Department Assigned:</span> <span class="info-value">Software Development Department</span></p>
+        </div>
+
+        <div class="week-label">Week No. ${weekNum}</div>
 
         <table>
           <thead>
             <tr>
-              <th>Day</th>
-              <th style="text-align:center;">Time In</th>
-              <th style="text-align:center;">Time Out</th>
-              <th style="text-align:center;">Hours</th>
-              <th>Tasks Completed</th>
-              <th>Remarks</th>
+              <th style="width:22%;">Date</th>
+              <th style="width:14%;">Time in</th>
+              <th style="width:14%;">Time out</th>
+              <th style="width:16%;">No. of Hours</th>
+              <th style="width:34%;">Tasks</th>
             </tr>
           </thead>
           <tbody>${rows}</tbody>
         </table>
 
-        <p class="footer">Generated on ${format(new Date(), 'PPPp')}</p>
+        <div class="summary">
+          <p>Weekly Total: <span class="summary-value">${weeklyTotal} hours and 0 minutes</span></p>
+          <p>Total Hours Completed: <span class="summary-value">${totalCompleted} hours and 0 minutes</span></p>
+          <p>Hours Remaining: <span class="summary-value">${hoursLeft} hours, 0 minutes</span></p>
+        </div>
+
+        <div class="reviewed-section">
+          <p><strong>Reviewed By:</strong></p>
+          <div class="line"></div>
+          <p class="name">Mr. Christian Villegas</p>
+          <p><strong>Software Development Manager</strong></p>
+          <p><strong>Software Development Department</strong></p>
+        </div>
       </body>
       </html>
     `;
