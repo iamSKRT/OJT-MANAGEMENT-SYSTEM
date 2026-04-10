@@ -5,9 +5,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { LogOut, Users, GraduationCap, Search, Pencil, Check, X, TrendingUp } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  LogOut, Users, GraduationCap, Search, Pencil, Check, X, TrendingUp,
+  Eye, Archive, ArchiveRestore
+} from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
-import { startOfWeek, endOfWeek } from 'date-fns';
+import { startOfWeek, endOfWeek, format } from 'date-fns';
 
 type Profile = Tables<'profiles'>;
 type DailyReport = Tables<'daily_reports'>;
@@ -27,6 +31,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [editingHours, setEditingHours] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [showArchived, setShowArchived] = useState(false);
+  const [viewingReports, setViewingReports] = useState<StudentData | null>(null);
 
   const now = new Date();
   const weekStart = startOfWeek(now, { weekStartsOn: 1 });
@@ -45,8 +51,13 @@ export default function AdminDashboard() {
       (roles ?? []).filter(r => r.role === 'student').map(r => r.user_id)
     );
 
+    // Exclude users who also have admin role
+    const adminUserIds = new Set(
+      (roles ?? []).filter(r => r.role === 'admin').map(r => r.user_id)
+    );
+
     const studentData: StudentData[] = (profiles ?? [])
-      .filter(p => studentUserIds.has(p.user_id))
+      .filter(p => studentUserIds.has(p.user_id) && !adminUserIds.has(p.user_id))
       .map(profile => {
         const studentReports = (reports ?? []).filter(r => r.user_id === profile.user_id);
         const totalHours = studentReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
@@ -88,18 +99,50 @@ export default function AdminDashboard() {
     setEditingHours(null);
   };
 
-  const handleSignOut = async () => {
-    await signOut();
+  const handleArchive = async (userId: string, archive: boolean) => {
+    const { error } = await supabase.from('profiles').update({ is_archived: archive } as any).eq('user_id', userId);
+    if (error) {
+      toast({ title: 'Error', description: error.message, variant: 'destructive' });
+    } else {
+      toast({ title: archive ? 'Archived' : 'Restored', description: `Student account ${archive ? 'archived' : 'restored'}.` });
+      setStudents(prev => prev.map(s =>
+        s.profile.user_id === userId
+          ? { ...s, profile: { ...s.profile, is_archived: archive } as any }
+          : s
+      ));
+    }
   };
 
-  const filtered = students.filter(s =>
-    s.profile.full_name.toLowerCase().includes(search.toLowerCase())
-  );
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (e) {
+      // Force reload on error
+      window.location.href = '/';
+    }
+  };
 
-  const totalStudents = students.length;
+  const filtered = students.filter(s => {
+    const profile = s.profile as any;
+    const matchesSearch = profile.full_name.toLowerCase().includes(search.toLowerCase());
+    const isArchived = profile.is_archived ?? false;
+    return matchesSearch && (showArchived ? isArchived : !isArchived);
+  });
+
+  const activeStudents = students.filter(s => !(s.profile as any).is_archived);
+  const totalStudents = activeStudents.length;
   const avgHours = totalStudents > 0
-    ? (students.reduce((s, st) => s + st.totalHours, 0) / totalStudents).toFixed(1)
+    ? (activeStudents.reduce((s, st) => s + st.totalHours, 0) / totalStudents).toFixed(1)
     : '0';
+
+  const formatTime12 = (time: string | null) => {
+    if (!time) return '';
+    const [h, m] = time.split(':');
+    const hour = parseInt(h);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${m} ${ampm}`;
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -130,7 +173,7 @@ export default function AdminDashboard() {
                 <Users className="w-4 h-4 text-primary" />
               </div>
               <p className="text-2xl font-heading font-bold">{totalStudents}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Total Students</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Active Students</p>
             </CardContent>
           </Card>
           <Card className="border-0 shadow-sm">
@@ -144,10 +187,21 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-10 border-0 bg-card shadow-sm" />
+        {/* Search & Filter */}
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Search students..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10 h-10 border-0 bg-card shadow-sm" />
+          </div>
+          <Button
+            variant={showArchived ? "default" : "outline"}
+            size="sm"
+            className="h-10 px-3"
+            onClick={() => setShowArchived(!showArchived)}
+          >
+            <Archive className="w-4 h-4 mr-1" />
+            {showArchived ? 'Archived' : 'Active'}
+          </Button>
         </div>
 
         {/* Student List */}
@@ -157,7 +211,9 @@ export default function AdminDashboard() {
               <div className="animate-pulse">Loading students...</div>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="text-center text-muted-foreground py-12">No students found.</div>
+            <div className="text-center text-muted-foreground py-12">
+              {showArchived ? 'No archived students.' : 'No students found.'}
+            </div>
           ) : (
             filtered.map(student => {
               const { profile, totalHours, weeklyHours } = student;
@@ -166,17 +222,33 @@ export default function AdminDashboard() {
                 ? Math.min(100, (totalHours / profile.total_required_hours) * 100)
                 : 0;
               const isEditing = editingHours === profile.user_id;
+              const isArchived = (profile as any).is_archived ?? false;
 
               return (
                 <Card key={profile.user_id} className="border-0 shadow-sm">
                   <CardContent className="p-4 space-y-4">
-                    {/* Student name & avatar */}
+                    {/* Student name & actions */}
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center font-heading font-bold text-primary text-sm">
                         {profile.full_name?.[0]?.toUpperCase() || '?'}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="font-semibold text-sm">{profile.full_name || 'Unnamed'}</p>
+                        {isArchived && <span className="text-xs text-destructive">Archived</span>}
+                      </div>
+                      <div className="flex gap-1">
+                        <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setViewingReports(student)} title="View Reports">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                        {isArchived ? (
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleArchive(profile.user_id, false)} title="Restore">
+                            <ArchiveRestore className="w-4 h-4 text-success" />
+                          </Button>
+                        ) : (
+                          <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleArchive(profile.user_id, true)} title="Archive">
+                            <Archive className="w-4 h-4 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -240,6 +312,44 @@ export default function AdminDashboard() {
           )}
         </div>
       </main>
+
+      {/* View Reports Dialog */}
+      <Dialog open={!!viewingReports} onOpenChange={(open) => !open && setViewingReports(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading">
+              {viewingReports?.profile.full_name} — Daily Reports
+            </DialogTitle>
+          </DialogHeader>
+          {viewingReports && viewingReports.reports.length === 0 ? (
+            <p className="text-muted-foreground text-sm py-4">No reports submitted yet.</p>
+          ) : (
+            <div className="space-y-2">
+              {viewingReports?.reports.map(report => (
+                <div key={report.id} className="p-3 rounded-xl bg-muted/50 space-y-1">
+                  <div className="flex justify-between items-center">
+                    <span className="font-semibold text-sm">{format(new Date(report.report_date), 'EEEE, MMM d, yyyy')}</span>
+                    <span className="font-heading font-bold text-sm text-primary">{report.hours_rendered}h</span>
+                  </div>
+                  {(report.time_in || report.time_out) && (
+                    <p className="text-xs text-muted-foreground">
+                      {report.time_in && `In: ${formatTime12(report.time_in)}`}
+                      {report.time_in && report.time_out && ' — '}
+                      {report.time_out && `Out: ${formatTime12(report.time_out)}`}
+                    </p>
+                  )}
+                  {report.tasks_completed && (
+                    <p className="text-sm">{report.tasks_completed}</p>
+                  )}
+                  {report.remarks && (
+                    <p className="text-xs text-muted-foreground italic">{report.remarks}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
