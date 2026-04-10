@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
+import Footer from '@/components/Footer';
 import type { Tables } from '@/integrations/supabase/types';
 
 type DailyReport = Tables<'daily_reports'>;
@@ -83,13 +84,47 @@ export default function StudentDashboard() {
     }
   }, [selectedDate, reports]);
 
+  // Auto-calculate hours rendered from time in/out minus 1hr lunch (12pm-1pm)
+  const calculateHours = (tIn: string, tOut: string): number => {
+    if (!tIn || !tOut) return 0;
+    const [hIn, mIn] = tIn.split(':').map(Number);
+    const [hOut, mOut] = tOut.split(':').map(Number);
+    const startMin = hIn * 60 + mIn;
+    const endMin = hOut * 60 + mOut;
+    if (endMin <= startMin) return 0;
+
+    // Calculate lunch overlap (12:00-13:00)
+    const lunchStart = 12 * 60;
+    const lunchEnd = 13 * 60;
+    const overlapStart = Math.max(startMin, lunchStart);
+    const overlapEnd = Math.min(endMin, lunchEnd);
+    const lunchDeduct = Math.max(0, overlapEnd - overlapStart);
+
+    const totalMinutes = endMin - startMin - lunchDeduct;
+    return Math.max(0, Math.round((totalMinutes / 60) * 100) / 100);
+  };
+
   const handleTimeIn = () => {
-    setTimeIn(getPhilippineTime());
+    const t = getPhilippineTime();
+    setTimeIn(t);
+    const hrs = calculateHours(t, timeOut);
+    if (hrs > 0) setHoursRendered(String(hrs));
   };
 
   const handleTimeOut = () => {
-    setTimeOut(getPhilippineTime());
+    const t = getPhilippineTime();
+    setTimeOut(t);
+    const hrs = calculateHours(timeIn, t);
+    if (hrs > 0) setHoursRendered(String(hrs));
   };
+
+  // Also recalculate when time inputs change manually
+  useEffect(() => {
+    if (timeIn && timeOut) {
+      const hrs = calculateHours(timeIn, timeOut);
+      if (hrs > 0) setHoursRendered(String(hrs));
+    }
+  }, [timeIn, timeOut]);
 
   const handleSave = async () => {
     if (!user) return;
@@ -375,6 +410,7 @@ export default function StudentDashboard() {
           </Card>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

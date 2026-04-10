@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import { GraduationCap, ArrowRight, Mail, Lock, User } from 'lucide-react';
+import Footer from '@/components/Footer';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
@@ -120,6 +121,9 @@ export default function Auth() {
             </p>
           </CardContent>
         </Card>
+      </div>
+      <div className="absolute bottom-0 left-0 right-0 z-10">
+        <Footer />
       </div>
     </div>
   );
