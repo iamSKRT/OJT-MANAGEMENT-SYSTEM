@@ -129,34 +129,48 @@ export default function StudentDashboard() {
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const existing = reports.find(r => r.report_date === dateStr);
+    try {
+      const dateStr = format(selectedDate, 'yyyy-MM-dd');
+      const existing = reports.find(r => r.report_date === dateStr);
 
-    const payload = {
-      hours_rendered: Number(hoursRendered) || 0,
-      tasks_completed: tasksCompleted,
-      remarks,
-      time_in: timeIn || null,
-      time_out: timeOut || null,
-    };
+      const payload = {
+        hours_rendered: Number(hoursRendered) || 0,
+        tasks_completed: tasksCompleted || '',
+        remarks: remarks || '',
+        time_in: timeIn || null,
+        time_out: timeOut || null,
+      };
 
-    if (existing) {
-      const { error } = await supabase.from('daily_reports').update(payload).eq('id', existing.id);
-      if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      else toast({ title: 'Report updated!' });
-    } else {
-      const { error } = await supabase.from('daily_reports').insert({
-        user_id: user.id,
-        report_date: dateStr,
-        ...payload,
-      });
-      if (error) toast({ title: 'Error', description: error.message, variant: 'destructive' });
-      else toast({ title: 'Report saved!' });
+      let saveError = null;
+
+      if (existing) {
+        const { error } = await supabase.from('daily_reports').update(payload).eq('id', existing.id);
+        saveError = error;
+        if (!error) toast({ title: 'Report updated!' });
+      } else {
+        const { error } = await supabase.from('daily_reports').insert({
+          user_id: user.id,
+          report_date: dateStr,
+          ...payload,
+        });
+        saveError = error;
+        if (!error) toast({ title: 'Report saved!' });
+      }
+
+      if (saveError) {
+        console.error('Save error:', saveError);
+        toast({ title: 'Error saving report', description: saveError.message, variant: 'destructive' });
+      } else {
+        // Refresh reports only on success
+        const { data } = await supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false });
+        setReports(data ?? []);
+      }
+    } catch (err: any) {
+      console.error('Unexpected error:', err);
+      toast({ title: 'Error', description: err?.message || 'Something went wrong', variant: 'destructive' });
+    } finally {
+      setSaving(false);
     }
-
-    const { data } = await supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false });
-    setReports(data ?? []);
-    setSaving(false);
   };
 
   const handleSignOut = async () => {
