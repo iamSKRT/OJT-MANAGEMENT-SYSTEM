@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp } from 'lucide-react';
+import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
 import Footer from '@/components/Footer';
@@ -146,7 +146,6 @@ export default function StudentDashboard() {
       if (existing) {
         const { error } = await supabase.from('daily_reports').update(payload).eq('id', existing.id);
         saveError = error;
-        if (!error) toast({ title: 'Report updated!' });
       } else {
         const { error } = await supabase.from('daily_reports').insert({
           user_id: user.id,
@@ -154,16 +153,15 @@ export default function StudentDashboard() {
           ...payload,
         });
         saveError = error;
-        if (!error) toast({ title: 'Report saved!' });
       }
 
       if (saveError) {
         console.error('Save error:', saveError);
         toast({ title: 'Error saving report', description: saveError.message, variant: 'destructive' });
       } else {
-        // Refresh reports only on success
-        const { data } = await supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false });
-        setReports(data ?? []);
+        toast({ title: 'Report saved successfully!' });
+        // Reload page after short delay so user sees the toast
+        setTimeout(() => window.location.reload(), 800);
       }
     } catch (err: any) {
       console.error('Unexpected error:', err);
@@ -419,6 +417,31 @@ export default function StudentDashboard() {
               <div className="mt-4 pt-4 border-t flex justify-between items-center">
                 <span className="text-sm font-medium">Weekly Total</span>
                 <span className="font-heading font-bold text-lg gradient-text">{weeklyTotal}h</span>
+              </div>
+              {/* Previous / Next Week */}
+              <div className="mt-3 flex justify-between">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const prev = new Date(selectedDate);
+                    prev.setDate(prev.getDate() - 7);
+                    setSelectedDate(prev);
+                  }}
+                >
+                  <ChevronLeft className="w-4 h-4 mr-1" /> Previous Week
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const next = new Date(selectedDate);
+                    next.setDate(next.getDate() + 7);
+                    setSelectedDate(next);
+                  }}
+                >
+                  Next Week <ChevronRight className="w-4 h-4 ml-1" />
+                </Button>
               </div>
             </CardContent>
           </Card>
