@@ -59,11 +59,7 @@ export default function StudentDashboard() {
   const weeklyTotal = weekReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
 
   useEffect(() => {
-    if (!user) return;
-    supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle()
-      .then(({ data }) => setProfile(data));
-    supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false })
-      .then(({ data }) => setReports(data ?? []));
+    fetchData();
   }, [user]);
 
   useEffect(() => {
@@ -126,6 +122,17 @@ export default function StudentDashboard() {
     }
   }, [timeIn, timeOut]);
 
+  // Extract fetch logic for reuse
+  const fetchData = async () => {
+    if (!user) return;
+    const [{ data: profileData }, { data: reportsData }] = await Promise.all([
+      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+      supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false })
+    ]);
+    setProfile(profileData);
+    setReports(reportsData ?? []);
+  };
+
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
@@ -160,8 +167,14 @@ export default function StudentDashboard() {
         toast({ title: 'Error saving report', description: saveError.message, variant: 'destructive' });
       } else {
         toast({ title: 'Report saved successfully!' });
-        // Reload page after short delay so user sees the toast
-        setTimeout(() => window.location.reload(), 800);
+        // Refresh data without page reload
+        await fetchData();
+        // Reset form
+        setHoursRendered('');
+        setTasksCompleted('');
+        setRemarks('');
+        setTimeIn('');
+        setTimeOut('');
       }
     } catch (err: any) {
       console.error('Unexpected error:', err);

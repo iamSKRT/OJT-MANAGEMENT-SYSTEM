@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,25 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    let link = document.querySelector('link[rel~="icon"]') as HTMLLinkElement;
+    if (!link) {
+      link = document.createElement('link');
+      link.rel = 'icon';
+      document.head.appendChild(link);
+    }
+link.href = '/graduate-hat.png';
+
+    return () => {
+      const links = document.querySelectorAll('link[rel~="icon"]');
+      links.forEach(l => l.remove());
+      const defaultFavicon = document.createElement('link');
+      defaultFavicon.rel = 'icon';
+defaultFavicon.href = '/graduate-hat.png';\n      defaultFavicon.type = 'image/png';
+      document.head.appendChild(defaultFavicon);
+    };
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +59,6 @@ export default function Auth() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
-      {/* Background decoration */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
@@ -128,3 +146,4 @@ export default function Auth() {
     </div>
   );
 }
+
