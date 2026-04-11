@@ -29,7 +29,7 @@ link.href = '/graduate-hat.png';
       links.forEach(l => l.remove());
       const defaultFavicon = document.createElement('link');
       defaultFavicon.rel = 'icon';
-defaultFavicon.href = '/graduate-hat.png';\n      defaultFavicon.type = 'image/png';
+defaultFavicon.href = '/graduate-hat.png';      defaultFavicon.type = 'image/png';
       document.head.appendChild(defaultFavicon);
     };
   }, []);
