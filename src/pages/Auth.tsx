@@ -22,14 +22,15 @@ export default function Auth() {
       link.rel = 'icon';
       document.head.appendChild(link);
     }
-link.href = '/graduate-hat.png';
+    link.href = '/graduate-hat.png';
 
     return () => {
       const links = document.querySelectorAll('link[rel~="icon"]');
       links.forEach(l => l.remove());
       const defaultFavicon = document.createElement('link');
       defaultFavicon.rel = 'icon';
-defaultFavicon.href = '/graduate-hat.png';\n      defaultFavicon.type = 'image/png';
+      defaultFavicon.href = '/graduate-hat.png';
+      defaultFavicon.type = 'image/png';
       document.head.appendChild(defaultFavicon);
     };
   }, []);
@@ -146,4 +147,3 @@ defaultFavicon.href = '/graduate-hat.png';\n      defaultFavicon.type = 'image/p
     </div>
   );
 }
-
