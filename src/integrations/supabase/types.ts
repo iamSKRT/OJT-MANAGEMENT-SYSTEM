@@ -59,6 +59,7 @@ export type Database = {
           full_name: string
           id: string
           is_archived: boolean
+          logo_url: string | null
           total_required_hours: number
           updated_at: string
           user_id: string
@@ -68,6 +69,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_archived?: boolean
+          logo_url?: string | null
           total_required_hours?: number
           updated_at?: string
           user_id: string
@@ -77,6 +79,7 @@ export type Database = {
           full_name?: string
           id?: string
           is_archived?: boolean
+          logo_url?: string | null
           total_required_hours?: number
           updated_at?: string
           user_id?: string
