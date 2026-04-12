@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
+import LogoUpload from '@/components/LogoUpload';
 import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
 import Footer from '@/components/Footer';
 import type { Tables } from '@/integrations/supabase/types';
