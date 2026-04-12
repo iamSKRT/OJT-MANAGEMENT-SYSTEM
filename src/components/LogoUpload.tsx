@@ -19,9 +19,9 @@ export default function LogoUpload({ userId, currentLogoUrl, onLogoUpdated }: Lo
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const validTypes = ['image/png', 'image/jpeg', 'image/jpg'];
+    const validTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/svg+xml'];
     if (!validTypes.includes(file.type)) {
-      toast({ title: 'Invalid file type', description: 'Please upload a PNG or JPG file.', variant: 'destructive' });
+      toast({ title: 'Invalid file type', description: 'Please upload a PNG, JPG, or SVG file.', variant: 'destructive' });
       return;
     }
 
@@ -36,7 +36,7 @@ export default function LogoUpload({ userId, currentLogoUrl, onLogoUpdated }: Lo
       const filePath = `${userId}/logo.${ext}`;
 
       // Remove old logo if exists
-      await supabase.storage.from('company-logos').remove([`${userId}/logo.png`, `${userId}/logo.jpg`, `${userId}/logo.jpeg`]);
+      await supabase.storage.from('company-logos').remove([`${userId}/logo.png`, `${userId}/logo.jpg`, `${userId}/logo.jpeg`, `${userId}/logo.svg`]);
 
       const { error: uploadError } = await supabase.storage
         .from('company-logos')
@@ -70,7 +70,7 @@ export default function LogoUpload({ userId, currentLogoUrl, onLogoUpdated }: Lo
   const handleRemove = async () => {
     setUploading(true);
     try {
-      await supabase.storage.from('company-logos').remove([`${userId}/logo.png`, `${userId}/logo.jpg`, `${userId}/logo.jpeg`]);
+      await supabase.storage.from('company-logos').remove([`${userId}/logo.png`, `${userId}/logo.jpg`, `${userId}/logo.jpeg`, `${userId}/logo.svg`]);
       await supabase.from('profiles').update({ logo_url: null }).eq('user_id', userId);
       onLogoUpdated(null);
       toast({ title: 'Logo removed' });
@@ -119,7 +119,7 @@ export default function LogoUpload({ userId, currentLogoUrl, onLogoUpdated }: Lo
       <input
         ref={fileInputRef}
         type="file"
-        accept=".png,.jpg,.jpeg"
+        accept=".png,.jpg,.jpeg,.svg"
         className="hidden"
         onChange={handleUpload}
       />
