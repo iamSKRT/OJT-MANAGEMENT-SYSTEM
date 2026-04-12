@@ -12,6 +12,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils';
 import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
+import LogoUpload from '@/components/LogoUpload';
 import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
 import Footer from '@/components/Footer';
 import type { Tables } from '@/integrations/supabase/types';
@@ -253,6 +254,20 @@ export default function StudentDashboard() {
             />
           </div>
         </div>
+
+        {/* Company Logo */}
+        <Card className="border-0 shadow-sm animate-fade-in">
+          <CardContent className="p-4">
+            <label className="text-xs font-medium text-muted-foreground mb-2 block uppercase tracking-wide">Company Logo</label>
+            {user && (
+              <LogoUpload
+                userId={user.id}
+                currentLogoUrl={(profile as any)?.logo_url ?? null}
+                onLogoUpdated={(url) => setProfile(prev => prev ? { ...prev, logo_url: url } as any : prev)}
+              />
+            )}
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily Report Form */}

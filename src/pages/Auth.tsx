@@ -29,12 +29,8 @@ export default function Auth() {
       links.forEach(l => l.remove());
       const defaultFavicon = document.createElement('link');
       defaultFavicon.rel = 'icon';
-<<<<<<< HEAD
       defaultFavicon.href = '/graduate-hat.png';
       defaultFavicon.type = 'image/png';
-=======
-defaultFavicon.href = '/graduate-hat.png';      defaultFavicon.type = 'image/png';
->>>>>>> e46be2d928c3375016011c6147d0d08d316d1487
       document.head.appendChild(defaultFavicon);
     };
   }, []);
