@@ -255,6 +255,20 @@ export default function StudentDashboard() {
           </div>
         </div>
 
+        {/* Company Logo */}
+        <Card className="border-0 shadow-sm animate-fade-in">
+          <CardContent className="p-4">
+            <label className="text-xs font-medium text-muted-foreground mb-2 block uppercase tracking-wide">Company Logo</label>
+            {user && (
+              <LogoUpload
+                userId={user.id}
+                currentLogoUrl={(profile as any)?.logo_url ?? null}
+                onLogoUpdated={(url) => setProfile(prev => prev ? { ...prev, logo_url: url } as any : prev)}
+              />
+            )}
+          </CardContent>
+        </Card>
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Daily Report Form */}
           <Card className="border-0 shadow-sm animate-fade-in" style={{ animationDelay: '0.1s' }}>
