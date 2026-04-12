@@ -1,7 +1,7 @@
-# Task: Add graduate-hat.png to all browser icons (references only, no file changes/deletes)
+# TODO: Fix Auth.tsx Merge Conflict
 
-## Steps (completed):\n\n**All browser icon references updated to use public/graduate-hat.png in Auth.tsx.**
-- [x] Step 1: Edit src/pages/Auth.tsx - Replace '/auth-favicon.svg' with '/graduate-hat.png' and '/favicon.ico' with '/graduate-hat.png', add type='image/png'
-- [ ] Step 2: Edit index.html - Add static <link rel="icon" href="/graduate-hat.png" type="image/png"> in <head> (skipped per user: browser icon refs only)
-- [x] Step 3: Test with dev server, verify browser favicons
-- [x] Step 4: Mark complete
+- [x] 1. Edit src/pages/Auth.tsx to remove Git merge conflict markers in useEffect cleanup (lines 32-37).
+- [x] 2. Verify Vite dev server compiles without syntax errors.
+- [x] 3. Test Auth page loads correctly.
+- [x] 4. Mark complete.
+
