@@ -64,7 +64,7 @@ export default function ExportWeeklyPdf({
       })
       .join('');
 
-    const logoUrl = window.location.origin + '/images/pisopay-logo.png';
+const logoUrl = profile?.logo_url ?? null;
 
     const html = `
       <!DOCTYPE html>
@@ -95,9 +95,7 @@ export default function ExportWeeklyPdf({
         </style>
       </head>
       <body>
-        <div class="logo-section">
-          <img src="${logoUrl}" alt="Logo" onerror="this.style.display='none'" />
-        </div>
+        ${logoUrl ? `\n          <div class="logo-section">\n            <img src="${logoUrl}" alt="Company Logo" onerror="this.parentElement.style.display='none';" style="max-width: 150px; height: auto; max-height: 80px; object-fit: contain;" />\n          </div>` : ''}
 
         <h1>WEEKLY REPORT SHEET</h1>
 
