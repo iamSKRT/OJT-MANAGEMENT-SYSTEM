@@ -1,4 +1,6 @@
 import { format, startOfWeek, endOfWeek, eachDayOfInterval, getWeek } from 'date-fns';
+import { useCallback } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { FileDown } from 'lucide-react';
 import type { Tables } from '@/integrations/supabase/types';
@@ -12,6 +14,7 @@ interface ExportWeeklyPdfProps {
   profile: Profile | null;
   totalCompleted: number;
   totalRequired: number;
+  userId: string;
 }
 
 export default function ExportWeeklyPdf({
@@ -20,6 +23,7 @@ export default function ExportWeeklyPdf({
   profile,
   totalCompleted,
   totalRequired,
+  userId,
 }: ExportWeeklyPdfProps) {
   const formatTime12 = (time: string) => {
     const [h, m] = time.split(':');
@@ -29,7 +33,37 @@ export default function ExportWeeklyPdf({
     return `${hour12}:${m}${ampm}`;
   };
 
-  const handleExport = () => {
+  const getLogoDataUrl = useCallback(async (): Promise<string | null> => {
+    if (!userId) return null;
+
+    const exts = ['png', 'jpg', 'jpeg', 'svg'];
+    const urls = [
+      profile?.logo_url,
+      ...exts.map(ext => supabase.storage.from('company-logos').getPublicUrl(`${userId}/logo.${ext}`).data.publicUrl)
+    ];
+
+    for (const url of urls) {
+      if (!url) continue;
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        const blob = await response.blob();
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } catch (err) {
+        console.log(`Failed to load logo from ${url}`);
+      }
+    }
+    return null;
+  }, [userId, profile?.logo_url]);
+
+  const handleExport = async () => {
+    const logoDataUrl = await getLogoDataUrl();
+
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
@@ -40,7 +74,6 @@ export default function ExportWeeklyPdf({
       return d >= weekStart && d <= weekEnd;
     });
 
-    // Only include days that have reports
     const filledDays = weekDays.filter((day) => {
       const dateStr = format(day, 'yyyy-MM-dd');
       return weekReports.some((r) => r.report_date === dateStr);
@@ -64,8 +97,6 @@ export default function ExportWeeklyPdf({
       })
       .join('');
 
-const logoUrl = profile?.logo_url ?? null;
-
     const html = `
       <!DOCTYPE html>
       <html>
@@ -75,8 +106,7 @@ const logoUrl = profile?.logo_url ?? null;
           * { margin: 0; padding: 0; box-sizing: border-box; }
           body { font-family: Arial, sans-serif; padding: 40px 50px; color: #000; }
           .logo-section { text-align: center; margin-bottom: 20px; }
-          .logo-section img { width: 120px; height: auto; }
-          .logo-text { font-size: 10px; color: #666; }
+          .logo-section img { width: 120px; height: auto; max-height: 80px; object-fit: contain; }
           h1 { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 16px; }
           .info-section { margin-bottom: 12px; font-size: 12px; }
           .info-section p { margin-bottom: 2px; }
@@ -95,7 +125,9 @@ const logoUrl = profile?.logo_url ?? null;
         </style>
       </head>
       <body>
-        ${logoUrl ? `\n          <div class="logo-section">\n            <img src="${logoUrl}" alt="Company Logo" onerror="this.parentElement.style.display='none';" style="max-width: 150px; height: auto; max-height: 80px; object-fit: contain;" />\n          </div>` : ''}
+        ${logoDataUrl ? `          <div class="logo-section">
+            <img src="${logoDataUrl}" alt="Company Logo" />
+          </div>` : ''}
 
         <h1>WEEKLY REPORT SHEET</h1>
 

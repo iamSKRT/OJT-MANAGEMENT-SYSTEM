@@ -262,8 +262,11 @@ export default function StudentDashboard() {
             {user && (
               <LogoUpload
                 userId={user.id}
-                currentLogoUrl={(profile as any)?.logo_url ?? null}
-                onLogoUpdated={(url) => setProfile(prev => prev ? { ...prev, logo_url: url } as any : prev)}
+                currentLogoUrl={profile?.logo_url ?? null}
+                onLogoUpdated={async (url) => {
+                  setProfile(prev => prev ? { ...prev, logo_url: url } : prev);
+                  await fetchData();
+                }}
               />
             )}
           </CardContent>
@@ -391,13 +394,7 @@ export default function StudentDashboard() {
                     totalCompleted={totalCompleted}
                     totalRequired={totalRequired}
                   />
-                  <ExportWeeklyPdf
-                    selectedDate={selectedDate}
-                    reports={reports}
-                    profile={profile}
-                    totalCompleted={totalCompleted}
-                    totalRequired={totalRequired}
-                  />
+                  <ExportWeeklyPdf                    selectedDate={selectedDate}                  reports={reports}                    profile={profile}                   totalCompleted={totalCompleted}                   totalRequired={totalRequired}                  userId={user?.id || ''}                 />
                 </div>
               </div>
             </CardHeader>

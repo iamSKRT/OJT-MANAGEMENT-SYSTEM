@@ -1,2 +1,9 @@
-# Logo Upload & PDF Export Fix\n\n## Steps:\n- [x] 1. Create TODO.md with plan steps\n- [x] 2. Edit src/components/ExportWeeklyPdf.tsx to use profile.logo_url optionally with clear display\n- [x] 3. Update TODO.md marking complete\n- [ ] 4. Test PDF export with/without logo (manual)\n- [x] 5. Complete task
+# Task Progress: Fix ExportWeeklyPdf JSX Error
 
+## Completed Steps
+- [x] Step 1: Edit src/pages/StudentDashboard.tsx to fix multiline JSX with \n characters in ExportWeeklyPdf component.
+- [x] Step 2: Verify no syntax errors and test PDF export functionality.
+- [x] Step 3: Complete task and cleanup TODO.md.
+
+## Next Steps
+- Create PR for changes and merge.
