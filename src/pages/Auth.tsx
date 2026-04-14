@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
+import type { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { GraduationCap, ArrowRight, Mail, Lock, User } from 'lucide-react';
+import { GraduationCap, ArrowRight, Mail, Lock, User, Clock } from 'lucide-react';
 import Footer from '@/components/Footer';
 
 export default function Auth() {
@@ -12,6 +13,7 @@ export default function Auth() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
+  const [totalRequiredHours, setTotalRequiredHours] = useState('600');
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -35,7 +37,7 @@ export default function Auth() {
     };
   }, []);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
 
@@ -43,16 +45,52 @@ export default function Auth() {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) toast({ title: 'Login failed', description: error.message, variant: 'destructive' });
     } else {
-      const { error } = await supabase.auth.signUp({
+      const metaData = {
+        full_name: fullName,
+        total_required_hours: totalRequiredHours
+      };
+      const { error: signupError } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: metaData },
       });
-      if (error) {
-        toast({ title: 'Signup failed', description: error.message, variant: 'destructive' });
+      if (signupError) {
+        toast({ title: 'Signup failed', description: signupError.message, variant: 'destructive' });
       } else {
-        toast({ title: 'Account created!', description: 'You can now log in.' });
-        setIsLogin(true);
+        // Auto login after successful signup
+        const { error: signinError } = await supabase.auth.signInWithPassword({ email, password });
+        if (signinError) {
+          toast({ title: 'Account created! Please log in manually.', description: signinError.message, variant: 'destructive' });
+          setIsLogin(true);
+        } else {
+          // Explicitly ensure profile has correct total_required_hours
+          const hoursNum = Number(totalRequiredHours);
+          if (!isNaN(hoursNum) && hoursNum > 0 && fullName.trim()) {
+            const { data: { session } } = await supabase.auth.getSession();
+            if (session?.user) {
+              type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
+              const profileData: ProfileInsert = {
+                user_id: session.user.id,
+                full_name: fullName.trim(),
+                total_required_hours: hoursNum,
+                is_archived: false,
+              };
+              const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert(profileData, { onConflict: 'user_id' });
+              if (profileError) {
+                toast({ 
+                  title: 'Profile save issue', 
+                  description: profileError.message, 
+                  variant: 'destructive' 
+                });
+              }
+            }
+          }
+          toast({ title: 'Account created & logged in successfully!', description: `Total hours set to ${totalRequiredHours}. Refreshing dashboard...` });
+          // Reload to ensure fresh profile fetch
+          setTimeout(() => window.location.reload(), 1500);
+        }
       }
     }
     setLoading(false);
@@ -70,14 +108,19 @@ export default function Auth() {
           <div className="mx-auto w-16 h-16 rounded-2xl bg-primary flex items-center justify-center mb-4 shadow-lg" style={{ boxShadow: '0 8px 30px hsl(250 85% 60% / 0.3)' }}>
             <GraduationCap className="w-8 h-8 text-primary-foreground" />
           </div>
-          <h1 className="font-heading text-3xl font-bold tracking-tight">OJT Tracker</h1>
-          <p className="text-muted-foreground mt-1">On-the-Job Training Management</p>
+          <h1 className="font-heading text-3xl font-bold tracking-tight">OJT Management System</h1>
+          <p className="text-muted-foreground mt-1"></p>
         </div>
 
         <Card className="animate-scale-in border-0 shadow-xl" style={{ boxShadow: 'var(--shadow-elevated)' }}>
           <CardHeader className="pb-4">
-            <CardTitle className="font-heading text-xl">{isLogin ? 'Welcome back' : 'Create account'}</CardTitle>
-            <CardDescription>{isLogin ? 'Sign in to continue tracking your progress' : 'Get started with your OJT reporting'}</CardDescription>
+            <CardTitle className="font-heading text-xl text-center">{isLogin ? 'Welcome back' : 'Create account'}</CardTitle>
+<CardDescription className="text-center">
+  {isLogin 
+    ? "Sign in to continue tracking your progress" 
+    : "Get started with your OJT reporting"
+  }
+</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -88,6 +131,22 @@ export default function Auth() {
                     placeholder="Full Name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    required
+                    className="pl-10 h-11"
+                  />
+                </div>
+              )}
+              {!isLogin && (
+                <div className="relative">
+                  <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    min="1"
+                    max="5000"
+                    step="1"
+                    placeholder="Total OJT hours required (e.g. 600)"
+                    value={totalRequiredHours}
+                    onChange={(e) => setTotalRequiredHours(e.target.value)}
                     required
                     className="pl-10 h-11"
                   />

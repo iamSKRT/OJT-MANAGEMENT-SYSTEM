@@ -1,6 +1,7 @@
-import { useState, useEffect, createContext, useContext, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useNavigate } from 'react-router-dom';
 
 type AppRole = 'admin' | 'student';
 
@@ -24,46 +25,55 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
   const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
-        setSession(session);
-        if (session?.user) {
-          const { data } = await supabase
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      setLoading(false);
+    });
+
+    // Listen for auth changes
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (event, newSession) => {
+      setSession(newSession);
+      
+      if (newSession?.user) {
+        try {
+          const { data, error } = await supabase
             .from('user_roles')
             .select('role')
-            .eq('user_id', session.user.id);
-          const roles = (data ?? []).map(r => r.role);
-          setRole(roles.includes('admin') ? 'admin' : roles[0] ?? 'student');
-        } else {
-          setRole(null);
-        }
-        setLoading(false);
-      }
-    );
+            .eq('user_id', newSession.user.id)
+            .maybeSingle();
 
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      if (session?.user) {
-        const { data } = await supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', session.user.id);
-        const roles = (data ?? []).map(r => r.role);
-        setRole(roles.includes('admin') ? 'admin' : roles[0] ?? 'student');
+          if (error) {
+            setRole('student'); // default fallback
+            return;
+          }
+
+          const roles = data ? [data.role] : [];
+          setRole(roles.includes('admin') ? 'admin' : (roles[0] ?? 'student'));
+        } catch {
+          setRole('student'); // silent fail
+        }
+      } else {
+        setRole(null);
       }
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {
+    await supabase.auth.signOut();
     setSession(null);
     setRole(null);
-    await supabase.auth.signOut();
-    window.location.href = '/';
+    navigate('/', { replace: true });
   };
 
   return (
@@ -74,3 +84,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+

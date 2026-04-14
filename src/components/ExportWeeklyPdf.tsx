@@ -87,9 +87,7 @@ export default function ExportWeeklyPdf({
         const dateStr = format(day, 'yyyy-MM-dd');
         const report = weekReports.find((r) => r.report_date === dateStr);
         return `
-          <tr>
-            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;font-weight:bold;">${format(day, 'MMMM d, yyyy')}</td>
-            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report?.time_in ? formatTime12(report.time_in) : ''}</td>
+          <tr>\n            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${format(day, 'MMMM d, yyyy')}</td>\n            <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report?.time_in ? formatTime12(report.time_in) : ''}</td>
             <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report?.time_out ? formatTime12(report.time_out) : ''}</td>
             <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">${report ? report.hours_rendered + ' hours' : ''}</td>
             <td style="padding:8px 10px;border:1px solid #000;font-size:11px;">${report?.tasks_completed || ''}</td>
@@ -112,9 +110,9 @@ export default function ExportWeeklyPdf({
           .info-section p { margin-bottom: 2px; }
           .info-label { font-weight: bold; }
           .info-value { text-decoration: underline; }
-          .week-label { text-align: center; font-size: 13px; font-weight: bold; margin: 16px 0 8px; background: #e8e8e8; padding: 4px; border: 1px solid #000; }
+
           table { width: 100%; border-collapse: collapse; }
-          th { background: #e8e8e8; padding: 8px 10px; border: 1px solid #000; font-size: 12px; font-weight: bold; text-align: center; }
+th { padding: 8px 10px; border: 1px solid #000; font-size: 12px; font-weight: bold; text-align: center; }
           .summary { text-align: right; font-size: 12px; margin-top: 12px; }
           .summary p { margin-bottom: 2px; }
           .summary-value { text-decoration: underline; font-weight: bold; }
@@ -136,10 +134,11 @@ export default function ExportWeeklyPdf({
           <p><span class="info-label">Department Assigned:</span> <span class="info-value">Software Development Department</span></p>
         </div>
 
-        <div class="week-label">Week No. ${weekNum}</div>
-
         <table>
           <thead>
+            <tr>
+              <th colspan="5" style="padding:12px 10px;border:1px solid #000;text-align:center;font-size:12px;font-weight:bold;background-color:white;">Week No. ${weekNum}</th>
+            </tr>
             <tr>
               <th style="width:22%;">Date</th>
               <th style="width:14%;">Time in</th>
@@ -152,9 +151,9 @@ export default function ExportWeeklyPdf({
         </table>
 
         <div class="summary">
-          <p>Weekly Total: <span class="summary-value">${weeklyTotal} hours and 0 minutes</span></p>
-          <p>Total Hours Completed: <span class="summary-value">${totalCompleted} hours and 0 minutes</span></p>
-          <p>Hours Remaining: <span class="summary-value">${hoursLeft} hours, 0 minutes</span></p>
+        <p><strong>Weekly Total:</strong> <span class="summary-value">${weeklyTotal}</span> hours and 0 minutes</p>
+        <p><strong>Total Hours Completed:</strong> <span class="summary-value">${totalCompleted}</span> hours and 0 minutes</p>
+        <p><strong>Hours Remaining:</strong> <span class="summary-value">${hoursLeft}</span> hours, 0 minutes</p>
         </div>
 
         <div class="reviewed-section">

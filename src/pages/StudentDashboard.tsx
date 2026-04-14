@@ -10,11 +10,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react';
+import { CalendarIcon, Clock, CheckCircle2, Timer, LogOut, GraduationCap, TrendingUp, ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 import ExportWeeklyPdf from '@/components/ExportWeeklyPdf';
 import LogoUpload from '@/components/LogoUpload';
 import ExportWeeklyExcel from '@/components/ExportWeeklyExcel';
 import Footer from '@/components/Footer';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { Tables } from '@/integrations/supabase/types';
 
 type DailyReport = Tables<'daily_reports'>;
@@ -32,8 +33,11 @@ const getPhilippineTime = () => {
 };
 
 export default function StudentDashboard() {
-  const { user, signOut } = useAuth();
+  const { user, loading: authLoading, signOut } = useAuth();
   const { toast } = useToast();
+  const [dataLoading, setDataLoading] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
   const [profile, setProfile] = useState<Profile | null>(null);
   const [reports, setReports] = useState<DailyReport[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
@@ -44,8 +48,10 @@ export default function StudentDashboard() {
   const [timeOut, setTimeOut] = useState('');
   const [saving, setSaving] = useState(false);
 
+  const isLoading = authLoading || dataLoading;
+
   const totalCompleted = reports.reduce((sum, r) => sum + Number(r.hours_rendered), 0);
-  const totalRequired = profile?.total_required_hours ?? 600;
+const totalRequired = profile?.total_required_hours ?? 0;
   const hoursLeft = Math.max(0, totalRequired - totalCompleted);
 
   const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -60,26 +66,39 @@ export default function StudentDashboard() {
   const weeklyTotal = weekReports.reduce((s, r) => s + Number(r.hours_rendered), 0);
 
   useEffect(() => {
-    fetchData();
+    if (user && !dataLoading) {
+      fetchData();
+    }
   }, [user]);
 
-  useEffect(() => {
-    const dateStr = format(selectedDate, 'yyyy-MM-dd');
-    const existing = reports.find(r => r.report_date === dateStr);
-    if (existing) {
-      setHoursRendered(String(existing.hours_rendered));
-      setTasksCompleted(existing.tasks_completed);
-      setRemarks(existing.remarks ?? '');
-      setTimeIn(existing.time_in ?? '');
-      setTimeOut(existing.time_out ?? '');
-    } else {
-      setHoursRendered('');
-      setTasksCompleted('');
-      setRemarks('');
-      setTimeIn('');
-      setTimeOut('');
+  // Retry-enabled fetch logic
+  const fetchData = async (retry = 0) => {
+    setDataLoading(true);
+    try {
+      if (!user) return;
+      const [{ data: profileData }, { data: reportsData }] = await Promise.all([
+        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+        supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false })
+      ]);
+      setProfile(profileData);
+      setReports(reportsData ?? []);
+      setRetryCount(0); // Reset retry count on success
+    } catch (error: any) {
+      console.error(`Fetch attempt ${retry + 1} failed:`, error);
+      if (retry < maxRetries) {
+        const delay = Math.pow(2, retry) * 1000; // Exponential backoff
+        setTimeout(() => fetchData(retry + 1), delay);
+      } else {
+        toast({
+          title: `Failed to load dashboard data (${maxRetries + 1}x tried)`,
+          description: 'Using cached/offline data. Check connection.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setDataLoading(false);
     }
-  }, [selectedDate, reports]);
+  };
 
   // Auto-calculate hours rendered from time in/out minus 1hr lunch (12pm-1pm)
   const calculateHours = (tIn: string, tOut: string): number => {
@@ -122,17 +141,6 @@ export default function StudentDashboard() {
       if (hrs > 0) setHoursRendered(String(hrs));
     }
   }, [timeIn, timeOut]);
-
-  // Extract fetch logic for reuse
-  const fetchData = async () => {
-    if (!user) return;
-    const [{ data: profileData }, { data: reportsData }] = await Promise.all([
-      supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-      supabase.from('daily_reports').select('*').eq('user_id', user.id).order('report_date', { ascending: false })
-    ]);
-    setProfile(profileData);
-    setReports(reportsData ?? []);
-  };
 
   const handleSave = async () => {
     if (!user) return;
@@ -189,7 +197,75 @@ export default function StudentDashboard() {
     await signOut();
   };
 
-  const progressPercent = totalRequired > 0 ? Math.min(100, (totalCompleted / totalRequired) * 100) : 0;
+
+
+  const handleClearDay = async () => {
+    if (!user) return;
+
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const dayName = format(selectedDate, 'MMM d, yyyy');
+
+    if (!confirm(`⚠️ Delete report for ${dayName} only? This cannot be undone.`)) {
+      return;
+    }
+
+    try {
+      // Count existing
+      const { data: countData } = await supabase
+        .from('daily_reports')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('report_date', dateStr);
+
+      const count = countData?.length || 0;
+
+      if (count === 0) {
+        toast({ title: 'No report', description: `No entry found for ${dayName}.` });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('daily_reports')
+        .delete()
+        .eq('user_id', user.id)
+        .eq('report_date', dateStr);
+
+      if (error) {
+        toast({
+          title: 'Error clearing day',
+          description: error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Reset form
+      setHoursRendered('');
+      setTasksCompleted('');
+      setRemarks('');
+      setTimeIn('');
+      setTimeOut('');
+
+      // Refresh data
+      await fetchData();
+
+      toast({
+        title: `Cleared entry for ${dayName}!`,
+        description: 'Form and summary updated.',
+      });
+    } catch (err: any) {
+      console.error('Clear day error:', err);
+      toast({
+        title: 'Error',
+        description: err?.message || 'Failed to clear day report',
+        variant: 'destructive',
+      });
+    }
+  };
+
+
+const progressPercent = totalRequired > 0 ? Math.min(100, (totalCompleted / totalRequired) * 100) : 0;
+  // const [showProfileWarning, setShowProfileWarning] = useState(false); // removed
 
   const formatTime = (time: string) => {
     if (!time) return '';
@@ -200,20 +276,59 @@ export default function StudentDashboard() {
     return `${hour12}:${m} ${ampm}`;
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-8 p-8 max-w-md mx-auto">
+          <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-heading font-bold text-muted-foreground">Loading Student Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              Fetching your reports and profile data{retryCount > 0 && ` (attempt ${retryCount + 1}/${maxRetries + 1})`}
+            </p>
+          </div>
+          <div className="grid grid-cols-3 gap-3 w-full max-w-md mx-auto">
+            <div className="space-y-3 p-4 bg-muted rounded-xl">
+              <div className="h-3 bg-muted-foreground/20 rounded animate-pulse"></div>
+              <div className="h-3 bg-muted-foreground/20 rounded w-3/4 animate-pulse"></div>
+            </div>
+            <div className="space-y-3 p-4 bg-muted rounded-xl">
+              <div className="h-3 bg-muted-foreground/20 rounded animate-pulse"></div>
+              <div className="h-3 bg-muted-foreground/20 rounded w-2/3 animate-pulse"></div>
+            </div>
+            <div className="space-y-3 p-4 bg-muted rounded-xl">
+              <div className="h-3 bg-muted-foreground/20 rounded animate-pulse"></div>
+              <div className="h-3 bg-muted-foreground/20 rounded w-1/2 animate-pulse"></div>
+            </div>
+          </div>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => fetchData(retryCount)}
+            className="mt-4"
+          >
+            Retry Now
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 glass border-b">
         <div className="container mx-auto flex items-center justify-between py-3 px-4">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-primary-foreground" />
-            </div>
-            <div>
-              <h1 className="font-heading text-base font-bold leading-tight">OJT Tracker</h1>
-              <p className="text-xs text-muted-foreground">{profile?.full_name || user?.email}</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center">
+            <GraduationCap className="w-5 h-5 text-primary-foreground" />
           </div>
+          <div>
+            <h1 className="font-heading text-base font-bold leading-tight">OJT Tracker</h1>
+            <p className="text-xs text-muted-foreground">{profile?.full_name || user?.email}</p>
+          </div>
+        </div>
+        {/* Profile warning removed - automatic setup */}
           <Button variant="ghost" size="sm" onClick={handleSignOut} className="text-muted-foreground hover:text-foreground">
             <LogOut className="w-4 h-4 mr-2" /> Sign Out
           </Button>
@@ -376,6 +491,19 @@ export default function StudentDashboard() {
               <Button onClick={handleSave} disabled={saving} className="w-full h-10 font-semibold">
                 {saving ? 'Saving...' : 'Save Report'}
               </Button>
+
+              <Button
+                variant="outline"
+                className="w-full h-10 font-semibold text-destructive hover:bg-destructive/10 border-destructive/50"
+                onClick={handleClearDay}
+                disabled={!reports.find(r => r.report_date === format(selectedDate, 'yyyy-MM-dd'))}
+                size="lg"
+              >
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear This Day
+              </Button>
+              
+
             </CardContent>
           </Card>
 
@@ -394,7 +522,7 @@ export default function StudentDashboard() {
                     totalCompleted={totalCompleted}
                     totalRequired={totalRequired}
                   />
-                  <ExportWeeklyPdf                    selectedDate={selectedDate}                  reports={reports}                    profile={profile}                   totalCompleted={totalCompleted}                   totalRequired={totalRequired}                  userId={user?.id || ''}                 />
+                  <ExportWeeklyPdf selectedDate={selectedDate} reports={reports} profile={profile} totalCompleted={totalCompleted} totalRequired={totalRequired} userId={user?.id || ''} />
                 </div>
               </div>
             </CardHeader>

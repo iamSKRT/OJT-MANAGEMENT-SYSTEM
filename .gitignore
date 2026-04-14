@@ -24,3 +24,15 @@ dist-ssr
 *.sw?
 .vercel
 .env*.local
+
+# OS generated files
+.DS_Store
+.DS_Store?
+
+# Packages
+*.lock
+bun.lockb
+
+# Testing
+test-results/
+test-results/**
