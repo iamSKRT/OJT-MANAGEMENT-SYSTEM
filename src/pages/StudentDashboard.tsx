@@ -42,19 +42,24 @@ export default function StudentDashboard() {
   const [timeOut, setTimeOut] = useState('');
   const [saving, setSaving] = useState(false);
 
-const { 
+  const { 
     data: profile, 
     isLoading: profileLoading, 
     error: profileError,
     refetch: refetchProfile 
-  } = useProfile(user?.id);
-  
+  } = useProfile(user?.id, {
+    enabled: !!user && !authLoading,
+  });
+
   const { 
     data: reports = [], 
     isLoading: reportsLoading, 
     error: reportsError,
     refetch: refetchReports 
-  } = useDailyReports(user?.id);
+  } = useDailyReports(user?.id, 50, {
+    enabled: !!user && !authLoading,
+  });
+
 
   const isLoading = authLoading || (user?.id && (profileLoading || reportsLoading));
   const hasError = !isLoading && (profileError || reportsError);
@@ -108,11 +113,12 @@ const {
   };
 
   useEffect(() => {
-    if (timeIn && timeOut) {
-      const hrs = calculateHours(timeIn, timeOut);
-      if (hrs > 0) setHoursRendered(String(hrs));
+    if (user?.id) {
+      refetchProfile();
+      refetchReports();
     }
-  }, [timeIn, timeOut]);
+  }, [user?.id]);
+
 
   const upsertReport = useDailyReportUpsert({
     onSuccess: () => {

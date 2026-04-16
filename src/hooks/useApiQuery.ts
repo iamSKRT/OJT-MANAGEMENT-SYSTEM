@@ -14,7 +14,7 @@ interface StudentWithStats {
   weeklyHours: number;
 }
 
-// Generic query helper with proper typing
+// Generic query helper
 export function useApiQuery<TData = unknown>(
   key: readonly unknown[],
   queryFn: () => Promise<TData>,
@@ -31,8 +31,11 @@ export function useApiQuery<TData = unknown>(
   });
 }
 
-// Profile by user ID - safe guard
-export function useProfile(userId?: string) {
+// ✅ FIXED: Profile hook (accepts options)
+export function useProfile(
+  userId?: string,
+  options?: Omit<UseQueryOptions<Profile | null, Error>, 'queryKey' | 'queryFn'>
+) {
   return useApiQuery<Profile | null>(
     ['profile', userId],
     async () => {
@@ -47,12 +50,19 @@ export function useProfile(userId?: string) {
       if (error) throw error as PostgrestError;
       return data;
     },
-    { enabled: !!userId }
+    {
+      enabled: !!userId,
+      ...options, // 🔥 allows control from component
+    }
   );
 }
 
-// Daily reports - safe guard
-export function useDailyReports(userId?: string, limit = 50) {
+// ✅ FIXED: Daily reports hook (accepts options)
+export function useDailyReports(
+  userId?: string,
+  limit = 50,
+  options?: Omit<UseQueryOptions<DailyReport[], Error>, 'queryKey' | 'queryFn'>
+) {
   return useApiQuery<DailyReport[]>(
     ['daily_reports', userId, limit],
     async () => {
@@ -68,11 +78,14 @@ export function useDailyReports(userId?: string, limit = 50) {
       if (error) throw error as PostgrestError;
       return data ?? [];
     },
-    { enabled: !!userId }
+    {
+      enabled: !!userId,
+      ...options, // 🔥 important fix
+    }
   );
 }
 
-// Students for admin - fully typed, null-safe
+// Students (unchanged)
 export function useStudents() {
   return useApiQuery<StudentWithStats[]>(
     ['students'],
@@ -99,15 +112,11 @@ export function useStudents() {
       const roles = rolesData ?? [];
 
       const studentUserIds = new Set(
-        roles
-          .filter((r) => r.role === 'student')
-          .map((r) => r.user_id)
+        roles.filter((r) => r.role === 'student').map((r) => r.user_id)
       );
 
       const adminUserIds = new Set(
-        roles
-          .filter((r) => r.role === 'admin')
-          .map((r) => r.user_id)
+        roles.filter((r) => r.role === 'admin').map((r) => r.user_id)
       );
 
       const now = new Date();
@@ -116,7 +125,7 @@ export function useStudents() {
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
 
-      const students: StudentWithStats[] = profiles
+      return profiles
         .filter(
           (p) =>
             studentUserIds.has(p.user_id) &&
@@ -149,11 +158,9 @@ export function useStudents() {
             weeklyHours,
           };
         });
-
-      return students;
     },
     {
-      refetchInterval: 300000, // 5 min
+      refetchInterval: 300000,
     }
   );
 }
