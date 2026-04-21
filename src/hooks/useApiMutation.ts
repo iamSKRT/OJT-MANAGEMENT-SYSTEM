@@ -122,7 +122,11 @@ export function useDailyReportUpsert(
 
       if (error) throw error;
 
-      queryClient.invalidateQueries({ queryKey: ['daily_reports'] });
+      // Invalidate and refetch all related queries
+      await queryClient.invalidateQueries({ 
+        queryKey: ['daily_reports'],
+        refetchType: 'all',
+      });
 
       return data as DailyReportRow;
     },
@@ -153,7 +157,51 @@ export function useDailyReportDelete(
 
       if (error) throw error;
 
-      queryClient.invalidateQueries({ queryKey: ['daily_reports'] });
+      // Invalidate and refetch all related queries
+      await queryClient.invalidateQueries({ 
+        queryKey: ['daily_reports'],
+        refetchType: 'all',
+      });
+    },
+    ...options,
+  });
+}
+
+/* =========================
+   DELETE PROFILE (ACCOUNT)
+========================= */
+export function useDeleteProfile(
+  options?: UseMutationOptions<
+    void,
+    Error,
+    { user_id: string },
+    unknown
+  >
+) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({ user_id }) => {
+      // Delete all daily reports first (will cascade)
+      await supabase
+        .from('daily_reports')
+        .delete()
+        .eq('user_id', user_id);
+
+      // Delete the profile (may need RLS policy adjustment)
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('user_id', user_id);
+
+      if (profileError) {
+        console.error('Delete profile error:', profileError);
+        throw new Error('Failed to delete profile. Make sure the account is archived first.');
+      }
+
+      // Invalidate queries
+      await queryClient.invalidateQueries({ queryKey: ['students'] });
+      await queryClient.invalidateQueries({ queryKey: ['profile'] });
     },
     ...options,
   });

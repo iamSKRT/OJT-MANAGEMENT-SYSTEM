@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,11 +9,10 @@ import { useToast } from '@/hooks/use-toast';
 import Footer from '@/components/Footer';
 import { useStudents } from '@/hooks/useApiQuery';
 import { useDebounce } from '@/hooks/use-debounce';
-import { useUpdateProfileHours, useArchiveProfile } from '@/hooks/useApiMutation';
-
+import { useUpdateProfileHours, useArchiveProfile, useDeleteProfile } from '@/hooks/useApiMutation';
 import {
   LogOut, Users, GraduationCap, Search, Pencil, Check, X, TrendingUp,
-  Eye, Archive, ArchiveRestore, Clock
+  Eye, Archive, ArchiveRestore, Clock, Trash2, AlertCircle
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
@@ -36,8 +35,28 @@ export default function AdminDashboard() {
   const [editingHours, setEditingHours] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [viewingReports, setViewingReports] = useState<StudentData | null>(null);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
   const { data: rawStudents = [], isLoading, error } = useStudents();
+  
+  // Set timeout if loading takes too long
+  useEffect(() => {
+    if (!isLoading) {
+      setLoadingTimeout(false);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      if (isLoading) {
+        console.warn('Admin dashboard loading timeout - marking as complete');
+        setLoadingTimeout(true);
+      }
+    }, 30000); // 30 second timeout
+
+    return () => clearTimeout(timer);
+  }, [isLoading]);
+
   const updateHours = useUpdateProfileHours({
     onSuccess: () => toast({ title: 'Hours updated!' }),
     onError: () => toast({ title: 'Update failed', variant: 'destructive' }),
@@ -47,6 +66,16 @@ export default function AdminDashboard() {
     onSuccess: () => toast({ title: 'Student status updated' }),
     onError: () => toast({ title: 'Update failed', variant: 'destructive' }),
   });
+
+  const deleteStudent = useDeleteProfile({
+    onSuccess: () => {
+      toast({ title: 'Account deleted successfully' });
+      setDeleteConfirm(null);
+    },
+    onError: () => toast({ title: 'Delete failed', variant: 'destructive' }),
+  });
+
+  const finalIsLoading = isLoading && !loadingTimeout;
 
   const debouncedSearch = useDebounce(search, 300);
 
@@ -146,7 +175,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="space-y-4">
-          {isLoading ? (
+          {finalIsLoading ? (
             <div className="grid gap-4 py-20">
               {Array.from({ length: 8 }).map((_, i) => (
                 <Skeleton key={i} className="h-32 rounded-2xl" />
@@ -204,6 +233,17 @@ export default function AdminDashboard() {
                             <Archive className="h-5 w-5 text-destructive" />
                           )}
                         </Button>
+                        {isArchived && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-11 w-11"
+                            onClick={() => setDeleteConfirm(profile.user_id)}
+                            title="Delete Account"
+                          >
+                            <Trash2 className="h-5 w-5 text-destructive" />
+                          </Button>
+                        )}
                       </div>
                     </div>
 
@@ -324,6 +364,41 @@ export default function AdminDashboard() {
               ))}
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!deleteConfirm} onOpenChange={() => setDeleteConfirm(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="font-heading flex items-center gap-2 text-destructive">
+              <AlertCircle className="w-5 h-5" />
+              Delete Account
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-muted-foreground">
+              Are you sure you want to permanently delete this account? This action cannot be undone. All associated data will be removed.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setDeleteConfirm(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  if (deleteConfirm) {
+                    deleteStudent.mutate({ user_id: deleteConfirm });
+                  }
+                }}
+                disabled={deleteStudent.isPending}
+              >
+                {deleteStudent.isPending ? 'Deleting...' : 'Delete Account'}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

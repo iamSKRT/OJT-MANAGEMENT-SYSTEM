@@ -23,9 +23,15 @@ export function useApiQuery<TData = unknown>(
   return useQuery<TData, Error>({
     queryKey: key,
     queryFn,
-    retry: 3,
+    retry: (failureCount, error: any) => {
+      // Don't retry on auth/permission errors
+      if (error?.status === 401 || error?.status === 403 || error?.status === 404) {
+        return false;
+      }
+      return failureCount < 2;
+    },
     retryDelay: (attemptIndex: number) =>
-      Math.min(1000 * 2 ** attemptIndex, 10000),
+      Math.min(1000 * (2 ** attemptIndex), 5000),
     staleTime: 5 * 60 * 1000,
     ...options,
   });

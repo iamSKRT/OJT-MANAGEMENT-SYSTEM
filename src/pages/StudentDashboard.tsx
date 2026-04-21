@@ -41,6 +41,7 @@ export default function StudentDashboard() {
   const [timeIn, setTimeIn] = useState('');
   const [timeOut, setTimeOut] = useState('');
   const [saving, setSaving] = useState(false);
+  const [loadingTimeout, setLoadingTimeout] = useState(false);
 
   const { 
     data: profile, 
@@ -61,7 +62,16 @@ export default function StudentDashboard() {
   });
 
 
-  const isLoading = authLoading || (user?.id && (profileLoading || reportsLoading));
+  useEffect(() => {
+    if (timeIn && timeOut) {
+      const hrs = calculateHours(timeIn, timeOut);
+      setHoursRendered(hrs > 0 ? String(hrs) : '');
+    } else {
+      setHoursRendered('');
+    }
+  }, [timeIn, timeOut]);
+
+  const isLoading = (authLoading || (user?.id && (profileLoading || reportsLoading))) && !loadingTimeout;
   const hasError = !isLoading && (profileError || reportsError);
 
   const totalCompleted = useMemo(() => reports.reduce((sum, r) => sum + Number(r.hours_rendered || 0), 0), [reports]);
@@ -74,60 +84,67 @@ export default function StudentDashboard() {
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
   const weekReports = useMemo(() => reports.filter(r => {
-    const d = new Date(r.report_date);
-    return d >= weekStart && d <= weekEnd;
-  }), [reports, weekStart, weekEnd]);
+      const d = new Date(r.report_date);
+      return d >= weekStart && d <= weekEnd;
+    }), [reports, weekStart, weekEnd]);
 
   const weeklyTotal = useMemo(() => weekReports.reduce((s, r) => s + Number(r.hours_rendered || 0), 0), [weekReports]);
 
   const calculateHours = (tIn: string, tOut: string): number => {
-    if (!tIn || !tOut) return 0;
-    const [hIn, mIn] = tIn.split(':').map(Number);
-    const [hOut, mOut] = tOut.split(':').map(Number);
-    const startMin = hIn * 60 + mIn;
-    const endMin = hOut * 60 + mOut;
+      if (!tIn || !tOut) return 0;
+
+  const [hIn, mIn] = tIn.split(':').map(Number);
+  const [hOut, mOut] = tOut.split(':').map(Number);
+
+  const startMin = hIn * 60 + mIn;
+  const endMin = hOut * 60 + mOut;
+
     if (endMin <= startMin) return 0;
 
-    const lunchStart = 12 * 60;
-    const lunchEnd = 13 * 60;
-    const overlapStart = Math.max(startMin, lunchStart);
-    const overlapEnd = Math.min(endMin, lunchEnd);
-    const lunchDeduct = Math.max(0, overlapEnd - overlapStart);
+  const lunchStart = 12 * 60;
+  const lunchEnd = 13 * 60;
 
-    const totalMinutes = endMin - startMin - lunchDeduct;
+  const overlapStart = Math.max(startMin, lunchStart);
+  const overlapEnd = Math.min(endMin, lunchEnd);
+
+  const lunchDeduct = Math.max(0, overlapEnd - overlapStart);
+
+  const totalMinutes = endMin - startMin - lunchDeduct;
+
     return Math.max(0, Math.round((totalMinutes / 60) * 100) / 100);
   };
 
   const handleTimeIn = () => {
-    const t = getPhilippineTime();
+  const t = getPhilippineTime();
     setTimeIn(t);
-    const hrs = calculateHours(t, timeOut);
-    if (hrs > 0) setHoursRendered(String(hrs));
   };
 
   const handleTimeOut = () => {
-    const t = getPhilippineTime();
+  const t = getPhilippineTime();
     setTimeOut(t);
-    const hrs = calculateHours(timeIn, t);
-    if (hrs > 0) setHoursRendered(String(hrs));
   };
 
+
   useEffect(() => {
-    if (user?.id) {
-      refetchProfile();
-      refetchReports();
+    if (user?.id && !authLoading) {
+      // Fetch fresh data when user loads
+      refetchProfile?.();
+      refetchReports?.();
     }
-  }, [user?.id]);
+  }, [user?.id, authLoading]);
 
 
   const upsertReport = useDailyReportUpsert({
-    onSuccess: () => {
+    onSuccess: (data) => {
       toast({ title: 'Report saved successfully!' });
-      setHoursRendered('');
-      setTasksCompleted('');
-      setRemarks('');
-      setTimeIn('');
-      setTimeOut('');
+      // Populate form with saved values so user sees what was stored
+      setHoursRendered(String(data?.hours_rendered ?? ''));
+      setTasksCompleted(data?.tasks_completed ?? '');
+      setRemarks(data?.remarks ?? '');
+      setTimeIn(data?.time_in ?? '');
+      setTimeOut(data?.time_out ?? '');
+      // Explicitly refetch to ensure data is updated
+      refetchReports();
     },
     onError: (err) => toast({ title: 'Error saving report', description: err.message, variant: 'destructive' }),
   });
@@ -140,6 +157,8 @@ export default function StudentDashboard() {
       setRemarks('');
       setTimeIn('');
       setTimeOut('');
+      // Explicitly refetch to ensure data is updated
+      refetchReports();
     },
     onError: (err) => toast({ title: 'Error', description: err.message, variant: 'destructive' }),
   });
@@ -159,7 +178,7 @@ export default function StudentDashboard() {
         time_out: timeOut || null,
       };
 
-      upsertReport.mutate(payload as any);
+      await upsertReport.mutateAsync(payload as any);
     } finally {
       setSaving(false);
     }
@@ -170,7 +189,11 @@ export default function StudentDashboard() {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     if (!confirm(`⚠️ Delete report for ${format(selectedDate, 'MMM d, yyyy')} only? This cannot be undone.`)) return;
 
-    deleteReport.mutate({ user_id: user.id, report_date: dateStr });
+    try {
+      await deleteReport.mutateAsync({ user_id: user.id, report_date: dateStr });
+    } catch (e) {
+      // error handled by mutation onError
+    }
   };
 
   const formatTime = (time: string) => {
@@ -182,14 +205,71 @@ export default function StudentDashboard() {
     return `${hour12}:${m} ${ampm}`;
   };
 
-  if (isLoading) {
+  // Populate form when the selected date changes or reports are updated
+  useEffect(() => {
+    const dateStr = format(selectedDate, 'yyyy-MM-dd');
+    const report = reports.find(r => r.report_date === dateStr);
+    if (report) {
+      setHoursRendered(String(report.hours_rendered ?? ''));
+      setTasksCompleted(report.tasks_completed ?? '');
+      setRemarks(report.remarks ?? '');
+      setTimeIn(report.time_in ?? '');
+      setTimeOut(report.time_out ?? '');
+    } else {
+      setHoursRendered('');
+      setTasksCompleted('');
+      setRemarks('');
+      setTimeIn('');
+      setTimeOut('');
+    }
+  }, [selectedDate, reports]);
+
+  // Only show the full-screen loader while auth is initializing; once auth is ready
+  // render the dashboard and show inline loading states for profile/reports.
+  if (authLoading && !loadingTimeout) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center space-y-8 p-8 max-w-md mx-auto">
           <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
           <div className="space-y-2">
             <h1 className="text-2xl font-heading font-bold text-muted-foreground">Loading Dashboard...</h1>
-            <p className="text-sm text-muted-foreground">Fetching your data</p>
+            <p className="text-sm text-muted-foreground">Initializing authentication</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasError && !authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center space-y-8 p-8 max-w-md mx-auto">
+          <div className="w-24 h-24 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+            <span className="text-4xl">⚠️</span>
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-heading font-bold text-muted-foreground">Unable to Load Dashboard</h1>
+            <p className="text-sm text-muted-foreground">
+              {profileError?.message || reportsError?.message || 'An error occurred while fetching your data'}
+            </p>
+          </div>
+          <div className="space-y-2">
+            <Button 
+              className="w-full"
+              onClick={() => {
+                refetchProfile();
+                refetchReports();
+              }}
+            >
+              Try Again
+            </Button>
+            <Button 
+              variant="outline"
+              className="w-full"
+              onClick={() => signOut()}
+            >
+              Sign Out
+            </Button>
           </div>
         </div>
       </div>
@@ -323,15 +403,12 @@ export default function StudentDashboard() {
 
               <div>
                 <label className="text-xs font-medium text-muted-foreground mb-1.5 block uppercase tracking-wide">Hours Rendered</label>
-                <Input
+                 <Input
+                  placeholder="auto-calculated"
                   type="number"
-                  min="0"
-                  max="24"
-                  step="0.5"
-                  placeholder="e.g. 8"
                   value={hoursRendered}
-                  onChange={(e) => setHoursRendered(e.target.value)}
-                  className="h-10"
+                  readOnly
+                  className="h-10 w-30 bg-muted"
                 />
               </div>
 

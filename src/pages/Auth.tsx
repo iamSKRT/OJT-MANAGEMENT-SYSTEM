@@ -1,20 +1,25 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import type { Database } from '@/integrations/supabase/types';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { GraduationCap, ArrowRight, Mail, Lock, User, Clock } from 'lucide-react';
+import { GraduationCap, ArrowRight, Mail, Lock, User, Clock, Eye, EyeOff } from 'lucide-react';
 import Footer from '@/components/Footer';
 
 export default function Auth() {
+  const navigate = useNavigate();
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [totalRequiredHours, setTotalRequiredHours] = useState('600');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -43,8 +48,28 @@ const handleSubmit = async (e: React.FormEvent) => {
 
     if (isLogin) {
       const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) toast({ title: 'Login failed', description: error.message, variant: 'destructive' });
+      if (error) {
+        toast({ title: 'Login failed', description: error.message, variant: 'destructive' });
+        setLoading(false);
+      } else {
+        // Navigation will be handled by AuthProvider
+        toast({ title: 'Login successful!', description: 'Redirecting to dashboard...' });
+      }
     } else {
+      // Validate passwords match
+      if (password !== confirmPassword) {
+        toast({ title: 'Passwords do not match', description: 'Please make sure both passwords are the same', variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
+
+      // Validate password length
+      if (password.length < 6) {
+        toast({ title: 'Password too short', description: 'Password must be at least 6 characters long', variant: 'destructive' });
+        setLoading(false);
+        return;
+      }
+
       const metaData = {
         full_name: fullName,
         total_required_hours: totalRequiredHours
@@ -56,48 +81,27 @@ const handleSubmit = async (e: React.FormEvent) => {
       });
       if (signupError) {
         toast({ title: 'Signup failed', description: signupError.message, variant: 'destructive' });
+        setLoading(false);
       } else {
-        // Auto login after successful signup
-        const { error: signinError } = await supabase.auth.signInWithPassword({ email, password });
-        if (signinError) {
-          toast({ title: 'Account created! Please log in manually.', description: signinError.message, variant: 'destructive' });
-          setIsLogin(true);
-        } else {
-          // Explicitly ensure profile has correct total_required_hours
-          const hoursNum = Number(totalRequiredHours);
-          if (!isNaN(hoursNum) && hoursNum > 0 && fullName.trim()) {
-            const { data: { session } } = await supabase.auth.getSession();
-            if (session?.user) {
-              type ProfileInsert = Database['public']['Tables']['profiles']['Insert'];
-              const profileData: ProfileInsert = {
-                user_id: session.user.id,
-                full_name: fullName.trim(),
-                total_required_hours: hoursNum,
-                is_archived: false,
-              };
-              const { error: profileError } = await supabase
-                .from('profiles')
-                .upsert(profileData, { onConflict: 'user_id' });
-              if (profileError) {
-                toast({ 
-                  title: 'Profile save issue', 
-                  description: profileError.message, 
-                  variant: 'destructive' 
-                });
-              }
-            }
-          }
-          toast({ title: 'Account created & logged in successfully!', description: `Total hours set to ${totalRequiredHours}. Refreshing dashboard...` });
-          // Reload to ensure fresh profile fetch
-          setTimeout(() => window.location.reload(), 1500);
-        }
+        // Account created successfully
+        toast({ title: 'Account created successfully!', description: 'Please log in with your credentials.', variant: 'default' });
+        
+        // Switch to login mode and clear form
+        setIsLogin(true);
+        setEmail('');
+        setPassword('');
+        setConfirmPassword('');
+        setFullName('');
+        setTotalRequiredHours('600');
+        setShowPassword(false);
+        setShowConfirmPassword(false);
+        setLoading(false);
       }
     }
-    setLoading(false);
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+   <div className="min-h-screen flex items-center justify-center bg-background p-4 pb-24 relative overflow-hidden">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
         <div className="absolute -bottom-40 -left-40 w-80 h-80 rounded-full bg-primary/5 blur-3xl" />
@@ -112,17 +116,17 @@ const handleSubmit = async (e: React.FormEvent) => {
           <p className="text-muted-foreground mt-1"></p>
         </div>
 
-        <Card className="animate-scale-in border-0 shadow-xl" style={{ boxShadow: 'var(--shadow-elevated)' }}>
-          <CardHeader className="pb-4">
-            <CardTitle className="font-heading text-xl text-center">{isLogin ? 'Welcome back' : 'Create account'}</CardTitle>
-<CardDescription className="text-center">
+       <Card className="animate-scale-in border shadow-xl rounded-2xl overflow-hidden">
+              <CardHeader className="pt-6 pb-2 px-6">
+            <CardTitle className="font-heading text-xl text-center leading-tight">{isLogin ? 'Welcome back' : 'Create account'}</CardTitle>
+<CardDescription className="text-center text-sm mt-1">
   {isLogin 
     ? "Sign in to continue tracking your progress" 
     : "Get started with your OJT reporting"
   }
 </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-6 pb-6 pt-4">
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isLogin && (
                 <div className="relative">
@@ -166,15 +170,43 @@ const handleSubmit = async (e: React.FormEvent) => {
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                 <Input
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="Password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   minLength={6}
-                  className="pl-10 h-11"
+                  className="pl-10 pr-10 h-11"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+              {!isLogin && (
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm Password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="pl-10 pr-10 h-11"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              )}
               <Button type="submit" className="w-full h-11 font-semibold text-sm" disabled={loading}>
                 {loading ? 'Please wait...' : isLogin ? 'Sign In' : 'Create Account'}
                 {!loading && <ArrowRight className="w-4 h-4 ml-2" />}
@@ -191,7 +223,17 @@ const handleSubmit = async (e: React.FormEvent) => {
             <p className="text-center text-sm text-muted-foreground">
               {isLogin ? "Don't have an account?" : 'Already have an account?'}{' '}
               <button
-                onClick={() => setIsLogin(!isLogin)}
+                onClick={() => {
+                  setIsLogin(!isLogin);
+                  // Reset form fields when switching modes
+                  setEmail('');
+                  setPassword('');
+                  setConfirmPassword('');
+                  setFullName('');
+                  setTotalRequiredHours('600');
+                  setShowPassword(false);
+                  setShowConfirmPassword(false);
+                }}
                 className="text-primary font-semibold hover:underline"
               >
                 {isLogin ? 'Sign Up' : 'Sign In'}
@@ -200,9 +242,9 @@ const handleSubmit = async (e: React.FormEvent) => {
           </CardContent>
         </Card>
       </div>
-      <div className="absolute bottom-0 left-0 right-0 z-10">
-        <Footer />
-      </div>
+     <div className="absolute bottom-0 left-0 right-0 w-full">
+  <Footer />
+</div>
     </div>
   );
 }
