@@ -16,7 +16,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [fullName, setFullName] = useState('');
-  const [totalRequiredHours, setTotalRequiredHours] = useState('600');
+  const [totalRequiredHours, setTotalRequiredHours] = useState('500');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -92,7 +92,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         setPassword('');
         setConfirmPassword('');
         setFullName('');
-        setTotalRequiredHours('600');
+        setTotalRequiredHours('500');
         setShowPassword(false);
         setShowConfirmPassword(false);
         setLoading(false);
@@ -132,9 +132,14 @@ const handleSubmit = async (e: React.FormEvent) => {
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                   <Input
+              
                     placeholder="Full Name"
                     value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
+                    onChange={(e) => {
+                    const value = e.target.value;
+                    const onlyLetters = value.replace(/[^a-zA-Z\s]/g, "");
+                    setFullName(onlyLetters);
+                  }}
                     required
                     className="pl-10 h-11"
                   />
@@ -143,17 +148,25 @@ const handleSubmit = async (e: React.FormEvent) => {
               {!isLogin && (
                 <div className="relative">
                   <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                  <Input
-                    type="number"
-                    min="1"
-                    max="5000"
-                    step="1"
-                    placeholder="Total OJT hours required (e.g. 600)"
-                    value={totalRequiredHours}
-                    onChange={(e) => setTotalRequiredHours(e.target.value)}
-                    required
-                    className="pl-10 h-11"
-                  />
+               <Input
+                type="text"
+                inputMode="numeric"
+                min="1"
+                max="5000"
+                placeholder="Total OJT hours required (e.g. 500)"
+                value={totalRequiredHours}
+                onChange={(e) => {
+                  // remove anything that's not a number
+                  let value = e.target.value.replace(/\D/g, "");
+
+                  // allow only up to 3 digits
+                  if (value.length <= 3) {
+                    setTotalRequiredHours(value);
+                  }
+                }}
+                required
+                className="pl-10 h-11"
+                />
                 </div>
               )}
               <div className="relative">
@@ -230,7 +243,7 @@ const handleSubmit = async (e: React.FormEvent) => {
                   setPassword('');
                   setConfirmPassword('');
                   setFullName('');
-                  setTotalRequiredHours('600');
+                  setTotalRequiredHours('');
                   setShowPassword(false);
                   setShowConfirmPassword(false);
                 }}

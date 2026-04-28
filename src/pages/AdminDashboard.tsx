@@ -3,7 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { useAuth } from '@/hooks/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import Footer from '@/components/Footer';
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { Database } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
+import { supabase } from '@/integrations/supabase/client';
 
 type Profile = Database['public']['Tables']['profiles']['Row'];
 type DailyReport = Database['public']['Tables']['daily_reports']['Row'];
@@ -74,6 +75,7 @@ export default function AdminDashboard() {
     },
     onError: () => toast({ title: 'Delete failed', variant: 'destructive' }),
   });
+  
 
   const finalIsLoading = isLoading && !loadingTimeout;
 
@@ -248,7 +250,7 @@ export default function AdminDashboard() {
                     </div>
 
                     <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                      <div className="p-4 rounded-xl bg-muted/50 text-center">
+                       <div className="p-4 rounded-xl bg-muted/50 text-center">
                         <p className="text-xs uppercase tracking-wide text-muted-foreground font-medium mb-2">Weekly</p>
                         <p className="text-2xl font-bold text-primary">{weeklyHours.toFixed(1)}h</p>
                       </div>
@@ -331,6 +333,9 @@ export default function AdminDashboard() {
             <DialogTitle className="font-heading">
               {viewingReports?.profile.full_name} - Daily Reports
             </DialogTitle>
+            <DialogDescription>
+              View all daily reports submitted by this student.
+            </DialogDescription>
           </DialogHeader>
           {viewingReports && viewingReports.reports.length === 0 ? (
             <div className="p-12 text-center text-muted-foreground">
@@ -374,6 +379,9 @@ export default function AdminDashboard() {
               <AlertCircle className="w-5 h-5" />
               Delete Account
             </DialogTitle>
+            <DialogDescription>
+              Permanently delete this student account and all associated data.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <p className="text-muted-foreground">

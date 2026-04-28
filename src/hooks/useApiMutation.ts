@@ -170,39 +170,68 @@ export function useDailyReportDelete(
 /* =========================
    DELETE PROFILE (ACCOUNT)
 ========================= */
-export function useDeleteProfile(
-  options?: UseMutationOptions<
-    void,
-    Error,
-    { user_id: string },
-    unknown
-  >
-) {
+export const useDeleteProfile = (
+  options?: UseMutationOptions<boolean, Error, { user_id: string }, unknown>
+) => {
   const queryClient = useQueryClient();
 
-  return useMutation({
+  const {
+    onSuccess: userOnSuccess,
+    onError: userOnError,
+    ...mutationOptions
+  } = options || {};
+
+  return useMutation<boolean, Error, { user_id: string }, unknown>({
     mutationFn: async ({ user_id }) => {
-      // Delete all daily reports first (will cascade)
-      await supabase
+      // delete related data first
+      const { error: roleError } = await supabase
+        .from('user_roles')
+        .delete()
+        .eq('user_id', user_id);
+      if (roleError) throw roleError;
+
+      const { error: reportsError } = await supabase
         .from('daily_reports')
         .delete()
         .eq('user_id', user_id);
+      if (reportsError) throw reportsError;
 
-      // Delete the profile (may need RLS policy adjustment)
       const { error: profileError } = await supabase
         .from('profiles')
         .delete()
         .eq('user_id', user_id);
+      if (profileError) throw profileError;
 
-      if (profileError) {
-        console.error('Delete profile error:', profileError);
-        throw new Error('Failed to delete profile. Make sure the account is archived first.');
-      }
-
-      // Invalidate queries
-      await queryClient.invalidateQueries({ queryKey: ['students'] });
-      await queryClient.invalidateQueries({ queryKey: ['profile'] });
+      return true;
     },
-    ...options,
+
+    ...mutationOptions,
+
+    onSuccess: (data, variables, _mutationResult, context) => {
+  // ✅ instant UI update
+  queryClient.setQueryData(['students'], (oldData: any) =>
+    Array.isArray(oldData)
+      ? oldData.filter(
+          (student) => student.profile.user_id !== variables.user_id
+        )
+      : oldData
+  );
+
+  // ✅ refetch fresh data
+  queryClient.invalidateQueries({ queryKey: ['students'] });
+  queryClient.invalidateQueries({ queryKey: ['daily_reports'] });
+  queryClient.invalidateQueries({ queryKey: ['profile'] });
+  queryClient.invalidateQueries({ queryKey: ['user_roles'] });
+
+  // ✅ FIXED CALL (now matches expected signature)
+  userOnSuccess?.(data, variables, _mutationResult, context);
+},
+
+onError: (error, variables, _mutationResult, context) => {
+  console.error('Delete profile failed:', error);
+
+  // ✅ FIXED CALL
+  userOnError?.(error, variables, _mutationResult, context);
+},
   });
-}
+};
