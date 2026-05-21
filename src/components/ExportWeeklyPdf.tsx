@@ -135,7 +135,8 @@ export default function ExportWeeklyPdf({
       return `
         <tr>
           <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">
-            ${format(day, 'MMMM d, yyyy')}
+            <div style="margin-bottom:4px;">${format(day, 'EEEE').toUpperCase()}</div>
+            <div>${format(day, 'MMMM d, yyyy')}</div>
           </td>
           <td style="padding:8px 10px;border:1px solid #000;text-align:center;font-size:12px;">
             ${report?.time_in ? formatTime12(report.time_in) : ''}
@@ -169,12 +170,12 @@ export default function ExportWeeklyPdf({
             min-height: 100vh;
           }
 
-          .logo-section { text-align: center; margin-bottom: 20px; }
+          .logo-section { text-align: center; margin-bottom: 40px; }
           .logo-section img { width: 120px; max-height: 80px; object-fit: contain; }
 
-          h1 { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 16px; }
+          h1 { font-size: 16px; font-weight: bold; text-align: center; margin-bottom: 30px; }
 
-          .info-section { margin-bottom: 12px; font-size: 12px; }
+          .info-section { margin-bottom: 20px; font-size: 12px; }
           .info-label { font-weight: bold; }
           .info-value { text-decoration: underline; }
 
