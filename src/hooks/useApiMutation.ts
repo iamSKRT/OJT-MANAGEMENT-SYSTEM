@@ -114,20 +114,75 @@ export function useDailyReportUpsert(
 
   return useMutation({
     mutationFn: async (payload: DailyReportInsert): Promise<DailyReportRow> => {
-      const { data, error } = await supabase
+      console.log('[Upsert] Payload:', payload);
+      
+      // First, check if a report already exists for this user_id and report_date
+      const { data: existingRecord, error: fetchError } = await supabase
         .from('daily_reports')
-        .upsert(payload)
-        .select()
+        .select('id')
+        .eq('user_id', payload.user_id)
+        .eq('report_date', payload.report_date)
         .single();
 
-      if (error) throw error;
+      console.log('[Upsert] Fetch existing record:', { existingRecord, fetchError });
 
-      // Invalidate and refetch all related queries
-      await queryClient.invalidateQueries({ 
-        queryKey: ['daily_reports'],
+      let upsertResponse;
+      
+      if (existingRecord?.id) {
+        // Record exists, use UPDATE
+        console.log('[Upsert] Record exists, performing UPDATE with id:', existingRecord.id);
+        upsertResponse = await supabase
+          .from('daily_reports')
+          .update(payload)
+          .eq('id', existingRecord.id)
+          .select()
+          .single();
+      } else {
+        // Record doesn't exist, use INSERT
+        console.log('[Upsert] Record does not exist, performing INSERT');
+        upsertResponse = await supabase
+          .from('daily_reports')
+          .insert([payload])
+          .select()
+          .single();
+      }
+
+      const { data, error } = upsertResponse;
+      console.log('[Upsert] Response - Data:', data, 'Error:', error);
+      
+      if (error) {
+        console.error('[Upsert] Error details:', error);
+        throw error;
+      }
+
+      if (!data) {
+        console.warn('[Upsert] No data returned from server');
+        throw new Error('No data returned from upsert operation');
+      }
+
+      // Invalidate and refetch all related daily report queries for this user
+      console.log('[Upsert] Starting query invalidation and refetch...');
+      console.log('[Upsert] Current cache state before invalidation');
+
+      await queryClient.invalidateQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'daily_reports' &&
+          query.queryKey[1] === payload.user_id,
         refetchType: 'all',
       });
 
+      // Explicitly refetch to ensure new data is loaded
+      console.log('[Upsert] Starting explicit refetch...');
+      await queryClient.refetchQueries({
+        predicate: (query) =>
+          Array.isArray(query.queryKey) &&
+          query.queryKey[0] === 'daily_reports' &&
+          query.queryKey[1] === payload.user_id,
+      });
+      console.log('[Upsert] Cache state after refetch:', queryClient.getQueryData(['daily_reports', payload.user_id]));
+
+      console.log('[Upsert] Success, returning:', data);
       return data as DailyReportRow;
     },
     ...options,

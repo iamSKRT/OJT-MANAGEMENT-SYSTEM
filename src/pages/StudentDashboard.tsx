@@ -42,6 +42,7 @@ export default function StudentDashboard() {
   const [timeOut, setTimeOut] = useState('');
   const [saving, setSaving] = useState(false);
   const [loadingTimeout, setLoadingTimeout] = useState(false);
+  const [historyLimit, setHistoryLimit] = useState(50);
 
   const { 
     data: profile, 
@@ -57,10 +58,11 @@ export default function StudentDashboard() {
     isLoading: reportsLoading, 
     error: reportsError,
     refetch: refetchReports 
-  } = useDailyReports(user?.id, 50, {
+  } = useDailyReports(user?.id, historyLimit, {
     enabled: !!user && !authLoading,
   });
 
+  const hasMoreHistory = reports.length === historyLimit;
 
   useEffect(() => {
     if (timeIn && timeOut) {
@@ -74,7 +76,11 @@ export default function StudentDashboard() {
   const isLoading = (authLoading || (user?.id && (profileLoading || reportsLoading))) && !loadingTimeout;
   const hasError = !isLoading && (profileError || reportsError);
 
-  const totalCompleted = useMemo(() => reports.reduce((sum, r) => sum + Number(r.hours_rendered || 0), 0), [reports]);
+  const totalCompleted = useMemo(() => {
+    const total = reports.reduce((sum, r) => sum + Number(r.hours_rendered || 0), 0);
+    console.log('[StudentDashboard] totalCompleted calculated:', { total, reportsCount: reports.length });
+    return total;
+  }, [reports]);
   const totalRequired = profile?.total_required_hours ?? 0;
   const hoursLeft = Math.max(0, totalRequired - totalCompleted);
   const progressPercent = totalRequired > 0 ? Math.min(100, (totalCompleted / totalRequired) * 100) : 0;
@@ -83,12 +89,47 @@ export default function StudentDashboard() {
   const weekEnd = endOfWeek(selectedDate, { weekStartsOn: 1 });
   const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
 
-  const weekReports = useMemo(() => reports.filter(r => {
-      const d = new Date(r.report_date);
-      return d >= weekStart && d <= weekEnd;
-    }), [reports, weekStart, weekEnd]);
+  const weekReports = useMemo(() => {
+    console.log('[StudentDashboard] Calculating week reports...');
+    console.log('[StudentDashboard] Week range:', { 
+      weekStart: format(weekStart, 'yyyy-MM-dd'), 
+      weekEnd: format(weekEnd, 'yyyy-MM-dd'),
+      selectedDate: format(selectedDate, 'yyyy-MM-dd')
+    });
+    console.log('[StudentDashboard] Total reports available:', reports.length);
+    
+    const filtered = reports.filter(r => {
+      // Parse date string as local date, not UTC
+      const [year, month, day] = r.report_date.split('-').map(Number);
+      const d = new Date(year, month - 1, day);
+      
+      const isInRange = d >= weekStart && d <= weekEnd;
+      if (r.report_date === '2026-02-18') {
+        console.log('[StudentDashboard] Feb 18 check:', {
+          report_date: r.report_date,
+          dateObject: format(d, 'yyyy-MM-dd HH:mm:ss'),
+          weekStart: format(weekStart, 'yyyy-MM-dd HH:mm:ss'),
+          weekEnd: format(weekEnd, 'yyyy-MM-dd HH:mm:ss'),
+          isInRange,
+          comparison: {
+            d_time: d.getTime(),
+            weekStart_time: weekStart.getTime(),
+            weekEnd_time: weekEnd.getTime()
+          }
+        });
+      }
+      return isInRange;
+    });
+    
+    console.log('[StudentDashboard] Filtered week reports:', filtered.length, filtered);
+    return filtered;
+  }, [reports, weekStart, weekEnd]);
 
-  const weeklyTotal = useMemo(() => weekReports.reduce((s, r) => s + Number(r.hours_rendered || 0), 0), [weekReports]);
+  const weeklyTotal = useMemo(() => {
+    const total = weekReports.reduce((s, r) => s + Number(r.hours_rendered || 0), 0);
+    console.log('[StudentDashboard] weeklyTotal calculated:', { total, weekReportsCount: weekReports.length, weekReports });
+    return total;
+  }, [weekReports]);
 
   const calculateHours = (tIn: string, tOut: string): number => {
       if (!tIn || !tOut) return 0;
@@ -135,18 +176,30 @@ export default function StudentDashboard() {
 
 
   const upsertReport = useDailyReportUpsert({
-    onSuccess: (data) => {
+    onSuccess: async (data) => {
+      console.log('[StudentDashboard] ==== SAVE SUCCESS START ====');
+      console.log('[StudentDashboard] onSuccess triggered with data:', data);
       toast({ title: 'Report saved successfully!' });
+      
       // Populate form with saved values so user sees what was stored
       setHoursRendered(String(data?.hours_rendered ?? ''));
       setTasksCompleted(data?.tasks_completed ?? '');
       setRemarks(data?.remarks ?? '');
       setTimeIn(data?.time_in ?? '');
       setTimeOut(data?.time_out ?? '');
-      // Explicitly refetch to ensure data is updated
-      refetchReports();
+      
+      // Wait for refetch to complete
+      console.log('[StudentDashboard] Before refetchReports - current reports count:', reports.length);
+      const refetchResult = await refetchReports();
+      console.log('[StudentDashboard] After refetchReports completed:', refetchResult);
+      console.log('[StudentDashboard] Reports state after refetch - should update soon');
+      console.log('[StudentDashboard] ==== SAVE SUCCESS END ====');
     },
-    onError: (err) => toast({ title: 'Error saving report', description: err.message, variant: 'destructive' }),
+    onError: (err) => {
+      console.error('[StudentDashboard] ==== SAVE ERROR ====');
+      console.error('[StudentDashboard] onError triggered:', err);
+      toast({ title: 'Error saving report', description: err.message, variant: 'destructive' });
+    },
   });
 
   const deleteReport = useDailyReportDelete({
@@ -178,7 +231,11 @@ export default function StudentDashboard() {
         time_out: timeOut || null,
       };
 
+      console.log('[StudentDashboard] handleSave payload:', payload);
       await upsertReport.mutateAsync(payload as any);
+      console.log('[StudentDashboard] Save completed successfully');
+    } catch (e) {
+      console.error('[StudentDashboard] Save error:', e);
     } finally {
       setSaving(false);
     }
@@ -209,13 +266,22 @@ export default function StudentDashboard() {
   useEffect(() => {
     const dateStr = format(selectedDate, 'yyyy-MM-dd');
     const report = reports.find(r => r.report_date === dateStr);
+    console.log('[StudentDashboard] Form population effect triggered:', {
+      selectedDate: dateStr,
+      reportFound: !!report,
+      reportsCount: reports.length,
+      allReportDates: reports.map(r => r.report_date)
+    });
+    
     if (report) {
+      console.log('[StudentDashboard] Populating form with report data:', report);
       setHoursRendered(String(report.hours_rendered ?? ''));
       setTasksCompleted(report.tasks_completed ?? '');
       setRemarks(report.remarks ?? '');
       setTimeIn(report.time_in ?? '');
       setTimeOut(report.time_out ?? '');
     } else {
+      console.log('[StudentDashboard] No report found for', dateStr, '- clearing form');
       setHoursRendered('');
       setTasksCompleted('');
       setRemarks('');
@@ -511,7 +577,12 @@ export default function StudentDashboard() {
                 <span className="text-sm font-medium">Weekly Total</span>
                 <span className="font-heading font-bold text-lg gradient-text">{weeklyTotal.toFixed(1)}h</span>
               </div>
-              <div className="mt-3 flex justify-between">
+              {hasMoreHistory && (
+                <div className="mt-3 text-sm text-muted-foreground">
+                  Showing latest {historyLimit} reports. Load more to see older history.
+                </div>
+              )}
+              <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:justify-between">
                 <Button
                   variant="outline"
                   size="sm"
@@ -523,17 +594,28 @@ export default function StudentDashboard() {
                 >
                   <ChevronLeft className="w-4 h-4 mr-1" /> Previous Week
                 </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    const next = new Date(selectedDate);
-                    next.setDate(next.getDate() + 7);
-                    setSelectedDate(next);
-                  }}
-                >
-                  Next Week <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const next = new Date(selectedDate);
+                      next.setDate(next.getDate() + 7);
+                      setSelectedDate(next);
+                    }}
+                  >
+                    Next Week <ChevronRight className="w-4 h-4 ml-1" />
+                  </Button>
+                  {hasMoreHistory && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setHistoryLimit((prev) => prev + 50)}
+                    >
+                      Load More History
+                    </Button>
+                  )}
+                </div>
               </div>
             </CardContent>
           </Card>

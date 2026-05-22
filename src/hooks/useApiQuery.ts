@@ -66,7 +66,7 @@ export function useProfile(
 // ✅ FIXED: Daily reports hook (accepts options)
 export function useDailyReports(
   userId?: string,
-  limit = 50,
+  limit?: number,
   options?: Omit<UseQueryOptions<DailyReport[], Error>, 'queryKey' | 'queryFn'>
 ) {
   return useApiQuery<DailyReport[]>(
@@ -74,12 +74,17 @@ export function useDailyReports(
     async () => {
       if (!userId) return [];
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('daily_reports')
         .select('*')
         .eq('user_id', userId)
-        .order('report_date', { ascending: false })
-        .limit(limit);
+        .order('report_date', { ascending: false });
+
+      if (limit !== undefined) {
+        query = query.limit(limit);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error as PostgrestError;
       return data ?? [];

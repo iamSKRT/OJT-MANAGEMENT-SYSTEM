@@ -77,6 +77,9 @@ export default function ExportWeeklyPdf({
   }, [userId, profile?.logo_url]);
 
   const handleExport = async () => {
+    console.log('[ExportWeeklyPdf] Starting export with reports:', reports);
+    console.log('[ExportWeeklyPdf] Selected date:', selectedDate);
+    
     const logoDataUrl = await getLogoDataUrl();
 
     const weekStart = startOfWeek(selectedDate, { weekStartsOn: 1 });
@@ -105,6 +108,9 @@ export default function ExportWeeklyPdf({
       const d = new Date(r.report_date);
       return d >= weekStart && d <= weekEnd;
     });
+
+    console.log('[ExportWeeklyPdf] Week reports:', weekReports);
+    console.log('[ExportWeeklyPdf] Week range:', { weekStart, weekEnd, weekReports: weekReports.length });
 
     const reportsUntilThisWeek = reports.filter((r) => {
       const d = new Date(r.report_date);
@@ -279,7 +285,13 @@ export default function ExportWeeklyPdf({
       printWindow.document.write(html);
       printWindow.document.close();
       printWindow.focus();
-      setTimeout(() => printWindow.print(), 400);
+      console.log('[ExportWeeklyPdf] Print window opened and ready');
+      setTimeout(() => {
+        printWindow.print();
+        console.log('[ExportWeeklyPdf] Print dialog triggered');
+      }, 400);
+    } else {
+      console.error('[ExportWeeklyPdf] Failed to open print window');
     }
   };
 
